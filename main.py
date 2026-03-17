@@ -111,7 +111,7 @@ with st.sidebar:
     st.markdown("---")
     page = st.radio(
         "Navigation",
-        ["📊 Dashboard", "📤 Senders", "📥 Receivers", "⚙️ Settings", "🚀 Run Controls", "📋 Logs"],
+        ["📊 Dashboard", "📤 Senders", "📥 Receivers", "🔗 Mapping", "⚙️ Settings", "🚀 Run Controls", "📋 Logs"],
         label_visibility="collapsed",
     )
     st.markdown("---")
@@ -315,6 +315,61 @@ elif page == "📥 Receivers":
 
 
 # ══════════════════════════════════════════════════════════════
+# 🔗 MAPPING
+# ══════════════════════════════════════════════════════════════
+
+elif page == "🔗 Mapping":
+    st.markdown("# 🔗 Sender → Receiver Mapping")
+    st.markdown("Assign up to 5 receivers to each sender. During warmup, each sender only emails its mapped receivers.")
+    st.markdown("---")
+
+    senders = db.get_all_senders()
+    receivers = db.get_all_receivers()
+
+    if not senders:
+        st.warning("No senders available. Add senders first.")
+    elif not receivers:
+        st.warning("No receivers available. Add receivers first.")
+    else:
+        receiver_options = {r["id"]: f"{r['name']} ({r['email']})" for r in receivers}
+        receiver_ids_list = list(receiver_options.keys())
+        receiver_labels_list = list(receiver_options.values())
+
+        for sender in senders:
+            with st.expander(f"📤 {sender['email']}", expanded=False):
+                current_mapped = db.get_mapped_receiver_ids(sender["id"])
+                mapped_count = len(current_mapped)
+
+                if mapped_count > 0:
+                    st.markdown(f"**Currently mapped:** {mapped_count} receiver(s)")
+                else:
+                    st.markdown("⚠️ **No receivers mapped yet**")
+
+                # Build default indices for multiselect
+                default_labels = []
+                for rid in current_mapped:
+                    if rid in receiver_options:
+                        default_labels.append(receiver_options[rid])
+
+                selected_labels = st.multiselect(
+                    "Select receivers (max 5)",
+                    options=receiver_labels_list,
+                    default=default_labels,
+                    key=f"map_{sender['id']}",
+                    max_selections=5,
+                )
+
+                # Convert labels back to IDs
+                label_to_id = {v: k for k, v in receiver_options.items()}
+                selected_ids = [label_to_id[lbl] for lbl in selected_labels if lbl in label_to_id]
+
+                if st.button("💾 Save Mapping", key=f"save_map_{sender['id']}", use_container_width=True):
+                    db.set_sender_mappings(sender["id"], selected_ids)
+                    st.success(f"Mapping saved for {sender['email']} — {len(selected_ids)} receiver(s)")
+                    st.rerun()
+
+
+# ══════════════════════════════════════════════════════════════
 # ⚙️ SETTINGS
 # ══════════════════════════════════════════════════════════════
 
@@ -413,6 +468,13 @@ elif page == "🚀 Run Controls":
         except Exception:
             pass
 
+    # Check if any sender has mapped receivers
+    any_mapped = False
+    for s in senders:
+        if db.get_mapped_receivers(s["id"]):
+            any_mapped = True
+            break
+
     ready = True
     if not api_key:
         st.warning("⚠️ Gemini API key not configured. Go to **Settings**.")
@@ -420,8 +482,8 @@ elif page == "🚀 Run Controls":
     if not senders:
         st.warning("⚠️ No active senders. Go to **Senders** to add and activate accounts.")
         ready = False
-    if not receivers:
-        st.warning("⚠️ No receivers. Go to **Receivers** to add email addresses.")
+    if not any_mapped:
+        st.warning("⚠️ No sender-receiver mappings configured. Go to **🔗 Mapping** to assign receivers.")
         ready = False
 
     # Status display
@@ -487,12 +549,24 @@ elif page == "🚀 Run Controls":
         status_text = st.empty()
         log_area = st.container()
 
-        total_ops = len(senders) * min(batch_size, len(receivers))
+        # Calculate total operations from mapped receivers
+        total_ops = 0
+        for s in senders:
+            mapped = db.get_mapped_receivers(s["id"])
+            total_ops += min(len(mapped), daily_limit)
+        total_ops = max(total_ops, 1)
         completed = 0
 
         for sender in senders:
             if not st.session_state.warmup_running:
                 break
+
+            # Get mapped receivers for this sender
+            mapped_receivers = db.get_mapped_receivers(sender["id"])
+            if not mapped_receivers:
+                with log_area:
+                    st.info(f"⏭️ {sender['email']} — no receivers mapped. Skipping.")
+                continue
 
             # Check daily limit
             today_count = db.get_today_sent_count(sender["email"])
@@ -502,7 +576,7 @@ elif page == "🚀 Run Controls":
                 continue
 
             remaining_limit = daily_limit - today_count
-            batch_receivers = receivers[:min(batch_size, remaining_limit)]
+            batch_receivers = mapped_receivers[:remaining_limit]
 
             for recv in batch_receivers:
                 if not st.session_state.warmup_running:

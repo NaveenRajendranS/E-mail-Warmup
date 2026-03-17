@@ -60,6 +60,17 @@ def init_db():
         )
     """)
 
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS sender_receiver_map (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id INTEGER NOT NULL,
+            receiver_id INTEGER NOT NULL,
+            FOREIGN KEY (sender_id) REFERENCES senders(id) ON DELETE CASCADE,
+            FOREIGN KEY (receiver_id) REFERENCES receivers(id) ON DELETE CASCADE,
+            UNIQUE(sender_id, receiver_id)
+        )
+    """)
+
     # Insert default settings if not present
     for key, value in DEFAULT_SETTINGS.items():
         c.execute(
@@ -70,8 +81,9 @@ def init_db():
     conn.commit()
     conn.close()
 
-    # Pre-load sender accounts
+    # Pre-load sender and receiver accounts
     seed_senders()
+    seed_receivers()
 
 
 # ── Seed Senders ─────────────────────────────────────────────
@@ -117,6 +129,56 @@ def seed_senders():
         conn.execute(
             "INSERT OR IGNORE INTO senders (email, app_password, active) VALUES (?, ?, ?)",
             (email, "CHANGE_ME", 0),
+        )
+    conn.commit()
+    conn.close()
+
+
+# ── Seed Receivers ───────────────────────────────────────────
+
+SEED_RECEIVERS = [
+    "prithvir.1011@gmail.com",
+    "prithvi.r3957@gmail.com",
+    "prithvi.gowda21@gmail.com",
+    "prithvi.pr1011@gmail.com",
+    "prithvi.gowda1999@gmail.com",
+    "test.automation.styldod@gmail.com",
+    "rohit.a.thorat@gmail.com",
+    "rothorat7779@gmail.com",
+    "jkomal9797@gmail.com",
+    "sladewinter@gmail.com",
+    "shital.nid@gmail.com",
+    "deepakpandey7100@gmail.com",
+    "craftsointeriors@gmail.com",
+    "arulpradeep95@gmail.com",
+    "arulpradeep05@gmail.com",
+    "komalrohan9797@gmail.com",
+    "mbc261996@gmail.com",
+    "editzpituresque@gmail.com",
+    "rewritingtheera@gmail.com",
+    "arulpradeepp05@icloud.com",
+    "ramyakrishna3024@gmail.com",
+    "puttanaik1993@gmail.com",
+    "abhishek.rath85@gmail.com",
+    "henanmaliyakkal@gmail.com",
+    "amalyaaamz@gmail.com",
+    "Amalyashaji926@gmail.com",
+    "amalyabackup0@gmail.com",
+    "wave.crest444@gmail.com",
+    "akash.shitole.5595@gmail.com",
+    "akash.shitole.5902@gmail.com",
+    "akash.shitole.0509@gmail.com",
+]
+
+
+def seed_receivers():
+    """Pre-load receiver emails if they don't already exist. Name defaults to email username."""
+    conn = get_connection()
+    for email in SEED_RECEIVERS:
+        name = email.split("@")[0].replace(".", " ").title()
+        conn.execute(
+            "INSERT OR IGNORE INTO receivers (name, email) VALUES (?, ?)",
+            (name, email),
         )
     conn.commit()
     conn.close()
@@ -224,8 +286,62 @@ def update_receiver(receiver_id, name, email):
 def delete_receiver(receiver_id):
     conn = get_connection()
     conn.execute("DELETE FROM receivers WHERE id = ?", (receiver_id,))
+    conn.execute("DELETE FROM sender_receiver_map WHERE receiver_id = ?", (receiver_id,))
     conn.commit()
     conn.close()
+
+
+# ── Sender-Receiver Mapping ──────────────────────────────────
+
+def get_mapped_receivers(sender_id):
+    """Get receivers mapped to a specific sender."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT r.* FROM receivers r
+        JOIN sender_receiver_map m ON r.id = m.receiver_id
+        WHERE m.sender_id = ?
+        ORDER BY r.id
+    """, (sender_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_mapped_receiver_ids(sender_id):
+    """Get receiver IDs mapped to a specific sender."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT receiver_id FROM sender_receiver_map WHERE sender_id = ?",
+        (sender_id,),
+    ).fetchall()
+    conn.close()
+    return [r["receiver_id"] for r in rows]
+
+
+def set_sender_mappings(sender_id, receiver_ids):
+    """Replace all mappings for a sender with the given receiver IDs."""
+    conn = get_connection()
+    conn.execute("DELETE FROM sender_receiver_map WHERE sender_id = ?", (sender_id,))
+    for rid in receiver_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO sender_receiver_map (sender_id, receiver_id) VALUES (?, ?)",
+            (sender_id, rid),
+        )
+    conn.commit()
+    conn.close()
+
+
+def get_all_mappings():
+    """Get all sender-receiver mappings grouped by sender."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT m.sender_id, s.email as sender_email, m.receiver_id, r.email as receiver_email, r.name as receiver_name
+        FROM sender_receiver_map m
+        JOIN senders s ON s.id = m.sender_id
+        JOIN receivers r ON r.id = m.receiver_id
+        ORDER BY m.sender_id, m.receiver_id
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 # ── Settings ─────────────────────────────────────────────────
