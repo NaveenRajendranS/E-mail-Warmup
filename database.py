@@ -70,6 +70,57 @@ def init_db():
     conn.commit()
     conn.close()
 
+    # Pre-load sender accounts
+    seed_senders()
+
+
+# ── Seed Senders ─────────────────────────────────────────────
+
+SEED_SENDERS = [
+    "admin@reimaginehome.app",
+    "sopia@reimaginehome.app",
+    "alex@reimaginehome.app",
+    "jason@reimaginehome.app",
+    "emily@reimaginehome.app",
+    "henan@reimaginehome.app",
+    "desiree@reimaginehome.app",
+    "tiffany@reimaginehome.app",
+    "chris@reimaginehome.app",
+    "melissa@reimaginehome.app",
+    "admin@reimaginehome.tech",
+    "valentina@reimaginehome.tech",
+    "lucas@reimaginehome.tech",
+    "amelia@reimaginehome.tech",
+    "ryan@reimaginehome.tech",
+    "helen@reimaginehome.tech",
+    "barbara@reimaginehome.tech",
+    "jade@reimaginehome.tech",
+    "valencia@reimaginehome.tech",
+    "luke@reimaginehome.tech",
+    "admin@reimaginehome.homes",
+    "olivia@reimaginehome.homes",
+    "lena@reimaginehome.homes",
+    "daniel@reimaginehome.homes",
+    "elena@reimaginehome.homes",
+    "ben@reimaginehome.homes",
+    "jennifer@reimaginehome.homes",
+    "shelly@reimaginehome.homes",
+    "kimberley@reimaginehome.homes",
+    "stephan@reimaginehome.homes",
+]
+
+
+def seed_senders():
+    """Pre-load sender emails if they don't already exist."""
+    conn = get_connection()
+    for email in SEED_SENDERS:
+        conn.execute(
+            "INSERT OR IGNORE INTO senders (email, app_password, active) VALUES (?, ?, ?)",
+            (email, "CHANGE_ME", 0),
+        )
+    conn.commit()
+    conn.close()
+
 
 # ── Sender CRUD ──────────────────────────────────────────────
 
