@@ -20,7 +20,7 @@ def generate_email(receiver_name: str, tone: str, api_key: str) -> dict:
     """
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
         prompt = f"""Write a very casual {tone.lower()} internal office email to {receiver_name}.
 
