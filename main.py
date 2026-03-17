@@ -12,7 +12,7 @@ import database as db
 from config import TONE_OPTIONS, STATUS_SENT, STATUS_FAILED, DEFAULT_SETTINGS
 from ai_generator import generate_email
 from send_email import send_email
-from utils import mask_password, validate_email, get_delay_seconds, status_color
+from utils import mask_password, validate_email, get_delay_seconds, status_color, get_avatar_color
 
 # ── Page Config ──────────────────────────────────────────────
 
@@ -33,6 +33,44 @@ if "warmup_running" not in st.session_state:
     st.session_state.warmup_running = False
 if "warmup_log" not in st.session_state:
     st.session_state.warmup_log = []
+
+# ── Card HTML Helper ─────────────────────────────────────────
+
+def render_profile_card(letter, label, sublabel, color, status_text=None, extra_html=""):
+    """Render a dark profile card with circular avatar."""
+    status_badge = ""
+    if status_text:
+        badge_color = "#10b981" if status_text == "Active" else "#6b7280"
+        status_badge = f'<div style="position:absolute;top:10px;left:10px;background:{badge_color};color:#fff;padding:2px 10px;border-radius:12px;font-size:0.7rem;font-weight:600;">● {status_text}</div>'
+
+    return f"""
+    <div style="
+        background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 24px 16px 20px;
+        text-align: center;
+        position: relative;
+        min-height: 200px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    ">
+        {status_badge}
+        <div style="
+            width: 72px; height: 72px;
+            background: {color};
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            margin: 8px auto 14px;
+            font-size: 1.8rem; font-weight: 700; color: white;
+            box-shadow: 0 4px 15px {color}66;
+        ">{letter}</div>
+        <div style="color:#fff;font-weight:600;font-size:0.95rem;margin-bottom:2px;word-break:break-all;">{label}</div>
+        <div style="color:#8b8ba7;font-size:0.78rem;word-break:break-all;">{sublabel}</div>
+        {extra_html}
+    </div>
+    """
+
 
 # ── Custom CSS ───────────────────────────────────────────────
 
@@ -72,18 +110,6 @@ st.markdown("""
     /* Tables */
     .stDataFrame { border-radius: 8px; overflow: hidden; }
 
-    /* Status badges */
-    .status-sent {
-        background: #0d7a3e; color: #fff;
-        padding: 2px 10px; border-radius: 20px;
-        font-size: 0.82rem; font-weight: 600;
-    }
-    .status-failed {
-        background: #c0392b; color: #fff;
-        padding: 2px 10px; border-radius: 20px;
-        font-size: 0.82rem; font-weight: 600;
-    }
-
     /* Buttons */
     .stButton > button {
         border-radius: 8px;
@@ -101,6 +127,18 @@ st.markdown("""
 
     /* Dividers */
     hr { border-color: rgba(255,255,255,0.08) !important; }
+
+    /* Mapped count badge */
+    .mapped-badge {
+        display: inline-block;
+        background: #4F46E5;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        margin-top: 8px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -160,7 +198,7 @@ if page == "📊 Dashboard":
 
 
 # ══════════════════════════════════════════════════════════════
-# 📤 SENDERS
+# 📤 SENDERS — Card Grid UI
 # ══════════════════════════════════════════════════════════════
 
 elif page == "📤 Senders":
@@ -188,63 +226,71 @@ elif page == "📤 Senders":
                     else:
                         st.error(msg)
 
-    # Sender Table
+    # Sender Card Grid
     senders = db.get_all_senders()
     if senders:
-        for sender in senders:
-            with st.container():
-                cols = st.columns([3, 3, 1.5, 1, 1, 1])
-                cols[0].markdown(f"**{sender['email']}**")
-                cols[1].code(mask_password(sender["app_password"]), language=None)
-                status = "🟢 Active" if sender["active"] else "🔴 Inactive"
-                cols[2].markdown(status)
+        CARDS_PER_ROW = 4
+        for i in range(0, len(senders), CARDS_PER_ROW):
+            cols = st.columns(CARDS_PER_ROW)
+            for j, col in enumerate(cols):
+                idx = i + j
+                if idx >= len(senders):
+                    break
+                sender = senders[idx]
+                email = sender["email"]
+                letter = email[0].upper()
+                color = get_avatar_color(email)
+                status_text = "Active" if sender["active"] else "Inactive"
+                name_part = email.split("@")[0].replace(".", " ").title()
 
-                # Toggle active
-                if sender["active"]:
-                    if cols[3].button("Deactivate", key=f"deact_{sender['id']}", type="secondary"):
-                        db.toggle_sender(sender["id"], False)
-                        st.rerun()
-                else:
-                    if cols[3].button("Activate", key=f"act_{sender['id']}", type="primary"):
-                        db.toggle_sender(sender["id"], True)
-                        st.rerun()
+                with col:
+                    st.markdown(
+                        render_profile_card(letter, name_part, email, color, status_text),
+                        unsafe_allow_html=True,
+                    )
 
-                # Edit
-                if cols[4].button("✏️", key=f"edit_s_{sender['id']}"):
-                    st.session_state[f"editing_sender_{sender['id']}"] = True
-
-                # Delete
-                if cols[5].button("🗑️", key=f"del_s_{sender['id']}"):
-                    db.delete_sender(sender["id"])
-                    st.rerun()
-
-                # Edit form
-                if st.session_state.get(f"editing_sender_{sender['id']}"):
-                    with st.form(f"edit_sender_form_{sender['id']}"):
-                        ec1, ec2 = st.columns(2)
-                        edit_email = ec1.text_input("Email", value=sender["email"])
-                        edit_pass = ec2.text_input("App Password", type="password", value=sender["app_password"])
-                        edit_active = st.checkbox("Active", value=bool(sender["active"]))
-                        sc1, sc2 = st.columns(2)
-                        if sc1.form_submit_button("Save", use_container_width=True):
-                            ok, msg = db.update_sender(sender["id"], edit_email.strip(), edit_pass.strip(), edit_active)
-                            if ok:
-                                st.session_state[f"editing_sender_{sender['id']}"] = False
-                                st.success(msg)
-                                st.rerun()
-                            else:
-                                st.error(msg)
-                        if sc2.form_submit_button("Cancel", use_container_width=True):
-                            st.session_state[f"editing_sender_{sender['id']}"] = False
+                    # Action buttons row
+                    b1, b2, b3 = st.columns(3)
+                    if sender["active"]:
+                        if b1.button("Deactivate", key=f"deact_{sender['id']}", type="secondary"):
+                            db.toggle_sender(sender["id"], False)
+                            st.rerun()
+                    else:
+                        if b1.button("Activate", key=f"act_{sender['id']}", type="primary"):
+                            db.toggle_sender(sender["id"], True)
                             st.rerun()
 
-                st.markdown("---")
+                    if b2.button("✏️", key=f"edit_s_{sender['id']}"):
+                        st.session_state[f"editing_sender_{sender['id']}"] = True
+
+                    if b3.button("🗑️", key=f"del_s_{sender['id']}"):
+                        db.delete_sender(sender["id"])
+                        st.rerun()
+
+                    # Edit form (expands below the card)
+                    if st.session_state.get(f"editing_sender_{sender['id']}"):
+                        with st.form(f"edit_sender_form_{sender['id']}"):
+                            edit_email = st.text_input("Email", value=sender["email"], key=f"ee_{sender['id']}")
+                            edit_pass = st.text_input("App Password", type="password", value=sender["app_password"], key=f"ep_{sender['id']}")
+                            edit_active = st.checkbox("Active", value=bool(sender["active"]), key=f"ea_{sender['id']}")
+                            sc1, sc2 = st.columns(2)
+                            if sc1.form_submit_button("Save"):
+                                ok, msg = db.update_sender(sender["id"], edit_email.strip(), edit_pass.strip(), edit_active)
+                                if ok:
+                                    st.session_state[f"editing_sender_{sender['id']}"] = False
+                                    st.success(msg)
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
+                            if sc2.form_submit_button("Cancel"):
+                                st.session_state[f"editing_sender_{sender['id']}"] = False
+                                st.rerun()
     else:
         st.info("No senders added yet. Click **Add New Sender** above.")
 
 
 # ══════════════════════════════════════════════════════════════
-# 📥 RECEIVERS
+# 📥 RECEIVERS — Card Grid UI
 # ══════════════════════════════════════════════════════════════
 
 elif page == "📥 Receivers":
@@ -272,55 +318,62 @@ elif page == "📥 Receivers":
                     else:
                         st.error(msg)
 
-    # Receiver Table
+    # Receiver Card Grid
     receivers = db.get_all_receivers()
     if receivers:
-        for recv in receivers:
-            with st.container():
-                cols = st.columns([3, 4, 1, 1])
-                cols[0].markdown(f"**{recv['name']}**")
-                cols[1].markdown(recv["email"])
+        CARDS_PER_ROW = 4
+        for i in range(0, len(receivers), CARDS_PER_ROW):
+            cols = st.columns(CARDS_PER_ROW)
+            for j, col in enumerate(cols):
+                idx = i + j
+                if idx >= len(receivers):
+                    break
+                recv = receivers[idx]
+                letter = recv["name"][0].upper() if recv["name"] else "?"
+                color = get_avatar_color(recv["email"])
 
-                # Edit
-                if cols[2].button("✏️", key=f"edit_r_{recv['id']}"):
-                    st.session_state[f"editing_receiver_{recv['id']}"] = True
+                with col:
+                    st.markdown(
+                        render_profile_card(letter, recv["name"], recv["email"], color),
+                        unsafe_allow_html=True,
+                    )
 
-                # Delete
-                if cols[3].button("🗑️", key=f"del_r_{recv['id']}"):
-                    db.delete_receiver(recv["id"])
-                    st.rerun()
+                    # Action buttons
+                    b1, b2 = st.columns(2)
+                    if b1.button("✏️ Edit", key=f"edit_r_{recv['id']}"):
+                        st.session_state[f"editing_receiver_{recv['id']}"] = True
+                    if b2.button("🗑️ Del", key=f"del_r_{recv['id']}"):
+                        db.delete_receiver(recv["id"])
+                        st.rerun()
 
-                # Edit form
-                if st.session_state.get(f"editing_receiver_{recv['id']}"):
-                    with st.form(f"edit_receiver_form_{recv['id']}"):
-                        ec1, ec2 = st.columns(2)
-                        edit_name = ec1.text_input("Name", value=recv["name"])
-                        edit_email = ec2.text_input("Email", value=recv["email"])
-                        sc1, sc2 = st.columns(2)
-                        if sc1.form_submit_button("Save", use_container_width=True):
-                            ok, msg = db.update_receiver(recv["id"], edit_name.strip(), edit_email.strip())
-                            if ok:
+                    # Edit form
+                    if st.session_state.get(f"editing_receiver_{recv['id']}"):
+                        with st.form(f"edit_receiver_form_{recv['id']}"):
+                            edit_name = st.text_input("Name", value=recv["name"], key=f"en_{recv['id']}")
+                            edit_email = st.text_input("Email", value=recv["email"], key=f"ere_{recv['id']}")
+                            sc1, sc2 = st.columns(2)
+                            if sc1.form_submit_button("Save"):
+                                ok, msg = db.update_receiver(recv["id"], edit_name.strip(), edit_email.strip())
+                                if ok:
+                                    st.session_state[f"editing_receiver_{recv['id']}"] = False
+                                    st.success(msg)
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
+                            if sc2.form_submit_button("Cancel"):
                                 st.session_state[f"editing_receiver_{recv['id']}"] = False
-                                st.success(msg)
                                 st.rerun()
-                            else:
-                                st.error(msg)
-                        if sc2.form_submit_button("Cancel", use_container_width=True):
-                            st.session_state[f"editing_receiver_{recv['id']}"] = False
-                            st.rerun()
-
-                st.markdown("---")
     else:
         st.info("No receivers added yet. Click **Add New Receiver** above.")
 
 
 # ══════════════════════════════════════════════════════════════
-# 🔗 MAPPING
+# 🔗 MAPPING — Card Grid with Receiver Expander
 # ══════════════════════════════════════════════════════════════
 
 elif page == "🔗 Mapping":
     st.markdown("# 🔗 Sender → Receiver Mapping")
-    st.markdown("Assign up to 5 receivers to each sender. During warmup, each sender only emails its mapped receivers.")
+    st.markdown("Assign up to 5 receivers to each sender. Click a sender card to manage its receivers.")
     st.markdown("---")
 
     senders = db.get_all_senders()
@@ -332,41 +385,62 @@ elif page == "🔗 Mapping":
         st.warning("No receivers available. Add receivers first.")
     else:
         receiver_options = {r["id"]: f"{r['name']} ({r['email']})" for r in receivers}
-        receiver_ids_list = list(receiver_options.keys())
         receiver_labels_list = list(receiver_options.values())
 
-        for sender in senders:
-            with st.expander(f"📤 {sender['email']}", expanded=False):
-                current_mapped = db.get_mapped_receiver_ids(sender["id"])
-                mapped_count = len(current_mapped)
+        CARDS_PER_ROW = 4
+        for i in range(0, len(senders), CARDS_PER_ROW):
+            cols = st.columns(CARDS_PER_ROW)
+            for j, col in enumerate(cols):
+                idx = i + j
+                if idx >= len(senders):
+                    break
+                sender = senders[idx]
+                email = sender["email"]
+                letter = email[0].upper()
+                color = get_avatar_color(email)
+                name_part = email.split("@")[0].replace(".", " ").title()
+                mapped_count = len(db.get_mapped_receiver_ids(sender["id"]))
 
+                badge_html = ""
                 if mapped_count > 0:
-                    st.markdown(f"**Currently mapped:** {mapped_count} receiver(s)")
+                    badge_html = f'<div class="mapped-badge">{mapped_count} receiver(s)</div>'
                 else:
-                    st.markdown("⚠️ **No receivers mapped yet**")
+                    badge_html = '<div style="color:#f59e0b;font-size:0.75rem;margin-top:8px;">⚠️ Not mapped</div>'
 
-                # Build default indices for multiselect
-                default_labels = []
-                for rid in current_mapped:
-                    if rid in receiver_options:
-                        default_labels.append(receiver_options[rid])
+                with col:
+                    st.markdown(
+                        render_profile_card(letter, name_part, email, color, extra_html=badge_html),
+                        unsafe_allow_html=True,
+                    )
 
-                selected_labels = st.multiselect(
-                    "Select receivers (max 5)",
-                    options=receiver_labels_list,
-                    default=default_labels,
-                    key=f"map_{sender['id']}",
-                    max_selections=5,
-                )
+            # Expander row for managing mappings (after each row of cards)
+            for j in range(min(CARDS_PER_ROW, len(senders) - i)):
+                sender = senders[i + j]
+                current_mapped = db.get_mapped_receiver_ids(sender["id"])
 
-                # Convert labels back to IDs
-                label_to_id = {v: k for k, v in receiver_options.items()}
-                selected_ids = [label_to_id[lbl] for lbl in selected_labels if lbl in label_to_id]
+                with st.expander(f"▶ Manage receivers for **{sender['email']}**", expanded=False):
+                    default_labels = []
+                    for rid in current_mapped:
+                        if rid in receiver_options:
+                            default_labels.append(receiver_options[rid])
 
-                if st.button("💾 Save Mapping", key=f"save_map_{sender['id']}", use_container_width=True):
-                    db.set_sender_mappings(sender["id"], selected_ids)
-                    st.success(f"Mapping saved for {sender['email']} — {len(selected_ids)} receiver(s)")
-                    st.rerun()
+                    selected_labels = st.multiselect(
+                        "Select receivers (max 5)",
+                        options=receiver_labels_list,
+                        default=default_labels,
+                        key=f"map_{sender['id']}",
+                        max_selections=5,
+                    )
+
+                    label_to_id = {v: k for k, v in receiver_options.items()}
+                    selected_ids = [label_to_id[lbl] for lbl in selected_labels if lbl in label_to_id]
+
+                    if st.button("💾 Save Mapping", key=f"save_map_{sender['id']}", use_container_width=True):
+                        db.set_sender_mappings(sender["id"], selected_ids)
+                        st.success(f"Mapping saved — {len(selected_ids)} receiver(s)")
+                        st.rerun()
+
+            st.markdown("---")
 
 
 # ══════════════════════════════════════════════════════════════

@@ -45,3 +45,16 @@ def status_color(status: str) -> str:
     elif status == "Failed":
         return "🔴"
     return "⚪"
+
+
+AVATAR_COLORS = [
+    "#7C3AED", "#2563EB", "#059669", "#D97706", "#DC2626",
+    "#DB2777", "#7C3AED", "#4F46E5", "#0891B2", "#65A30D",
+    "#EA580C", "#9333EA", "#0D9488", "#CA8A04", "#E11D48",
+]
+
+
+def get_avatar_color(text: str) -> str:
+    """Get a consistent color for an avatar based on the text hash."""
+    return AVATAR_COLORS[hash(text) % len(AVATAR_COLORS)]
+
