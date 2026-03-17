@@ -43,33 +43,14 @@ def render_profile_card(letter, label, sublabel, color, status_text=None, extra_
         badge_color = "#10b981" if status_text == "Active" else "#6b7280"
         status_badge = f'<div style="position:absolute;top:10px;left:10px;background:{badge_color};color:#fff;padding:2px 10px;border-radius:12px;font-size:0.7rem;font-weight:600;">● {status_text}</div>'
 
-    return f"""
-    <div style="
-        background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 16px;
-        padding: 24px 16px 20px;
-        text-align: center;
-        position: relative;
-        min-height: 200px;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    ">
-        {status_badge}
-        <div style="
-            width: 72px; height: 72px;
-            background: {color};
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            margin: 8px auto 14px;
-            font-size: 1.8rem; font-weight: 700; color: white;
-            box-shadow: 0 4px 15px {color}66;
-        ">{letter}</div>
-        <div style="color:#fff;font-weight:600;font-size:0.95rem;margin-bottom:2px;word-break:break-all;">{label}</div>
-        <div style="color:#8b8ba7;font-size:0.78rem;word-break:break-all;">{sublabel}</div>
-        {extra_html}
-    </div>
-    """
+    html = f"""<div style="background:linear-gradient(145deg,#1a1a2e 0%,#16213e 100%);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:24px 16px 20px;text-align:center;position:relative;min-height:200px;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+{status_badge}
+<div style="width:72px;height:72px;background:{color};border-radius:50%;display:flex;align-items:center;justify-content:center;margin:8px auto 14px;font-size:1.8rem;font-weight:700;color:white;box-shadow:0 4px 15px {color}66;">{letter}</div>
+<div style="color:#fff;font-weight:600;font-size:0.95rem;margin-bottom:2px;word-break:break-all;">{label}</div>
+<div style="color:#8b8ba7;font-size:0.78rem;word-break:break-all;">{sublabel}</div>
+{extra_html}
+</div>"""
+    return html
 
 
 # ── Custom CSS ───────────────────────────────────────────────
