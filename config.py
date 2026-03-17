@@ -14,6 +14,8 @@ DEFAULT_SETTINGS = {
     "daily_limit": 20,
     "random_delay": True,
     "tone": "Casual",
+    "rounds_per_day": 5,
+    "gap_minutes": 60,
 }
 
 # Tone options for email generation

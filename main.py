@@ -487,6 +487,23 @@ elif page == "⚙️ Settings":
         )
 
         st.markdown("---")
+        st.markdown("### Scheduler")
+
+        col5, col6 = st.columns(2)
+        rounds_per_day = col5.number_input(
+            "Rounds per day",
+            min_value=1, max_value=20,
+            value=settings.get("rounds_per_day", 5),
+            help="Number of sending rounds per day. Each round sends to all mapped receivers.",
+        )
+        gap_minutes = col6.number_input(
+            "Gap between rounds (minutes)",
+            min_value=10, max_value=180,
+            value=settings.get("gap_minutes", 60),
+            help="Wait time between each round.",
+        )
+
+        st.markdown("---")
         save_btn = st.form_submit_button("💾 Save Settings", use_container_width=True, type="primary")
 
         if save_btn:
@@ -497,6 +514,8 @@ elif page == "⚙️ Settings":
                 "daily_limit": int(daily_limit),
                 "random_delay": random_delay,
                 "tone": tone,
+                "rounds_per_day": int(rounds_per_day),
+                "gap_minutes": int(gap_minutes),
             })
             st.success("Settings saved successfully!")
             st.rerun()
@@ -508,7 +527,7 @@ elif page == "⚙️ Settings":
 
 elif page == "🚀 Run Controls":
     st.markdown("# 🚀 Run Controls")
-    st.markdown("Start, stop, or reset the email warmup engine.")
+    st.markdown("Auto-scheduler: sends emails in rounds with gaps between each round.")
     st.markdown("---")
 
     settings = db.get_settings()
@@ -543,11 +562,15 @@ elif page == "🚀 Run Controls":
 
     # Status display
     st.markdown("### Current Status")
-    status_cols = st.columns(4)
+    rounds_per_day = settings.get("rounds_per_day", 5)
+    gap_minutes = settings.get("gap_minutes", 60)
+
+    status_cols = st.columns(5)
     status_cols[0].metric("Active Senders", len(senders))
     status_cols[1].metric("Receivers", len(receivers))
-    status_cols[2].metric("Batch Size", settings.get("batch_size", 5))
-    status_cols[3].metric("Daily Limit", settings.get("daily_limit", 20))
+    status_cols[2].metric("Rounds/Day", rounds_per_day)
+    status_cols[3].metric("Gap", f"{gap_minutes} min")
+    status_cols[4].metric("Daily Limit", settings.get("daily_limit", 20))
 
     st.markdown("---")
 
@@ -556,7 +579,7 @@ elif page == "🚀 Run Controls":
 
     with btn_cols[0]:
         start_clicked = st.button(
-            "▶️ Start Warmup",
+            "▶️ Start Auto Warmup",
             disabled=not ready or st.session_state.warmup_running,
             use_container_width=True,
             type="primary",
@@ -588,100 +611,145 @@ elif page == "🚀 Run Controls":
         st.info("Warmup stopped.")
         st.rerun()
 
-    # ── Warmup Execution ─────────────────────────────────────
+    # ── Auto-Scheduler Execution ─────────────────────────────
 
     if start_clicked and ready:
         st.session_state.warmup_running = True
         st.session_state.warmup_log = []
 
-        batch_size = settings.get("batch_size", 5)
         delay_min = settings.get("delay_minutes", 2)
-        random_delay = settings.get("random_delay", True)
+        random_delay_flag = settings.get("random_delay", True)
         daily_limit = settings.get("daily_limit", 20)
         tone = settings.get("tone", "Casual")
 
+        round_header = st.empty()
         progress_bar = st.progress(0)
         status_text = st.empty()
+        countdown_area = st.empty()
         log_area = st.container()
 
-        # Calculate total operations from mapped receivers
-        total_ops = 0
-        for s in senders:
-            mapped = db.get_mapped_receivers(s["id"])
-            total_ops += min(len(mapped), daily_limit)
-        total_ops = max(total_ops, 1)
-        completed = 0
-
-        for sender in senders:
+        for current_round in range(1, rounds_per_day + 1):
             if not st.session_state.warmup_running:
                 break
 
-            # Get mapped receivers for this sender
-            mapped_receivers = db.get_mapped_receivers(sender["id"])
-            if not mapped_receivers:
-                with log_area:
-                    st.info(f"⏭️ {sender['email']} — no receivers mapped. Skipping.")
-                continue
+            round_header.markdown(f"### 🔄 Round {current_round} of {rounds_per_day}")
 
-            # Check daily limit
-            today_count = db.get_today_sent_count(sender["email"])
-            if today_count >= daily_limit:
-                with log_area:
-                    st.warning(f"⏭️ {sender['email']} — daily limit reached ({today_count}/{daily_limit}). Skipping.")
-                continue
+            # Re-fetch active senders each round (in case user changed them)
+            active_senders = db.get_active_senders()
 
-            remaining_limit = daily_limit - today_count
-            batch_receivers = mapped_receivers[:remaining_limit]
+            # Calculate total ops for this round
+            total_ops = 0
+            for s in active_senders:
+                mapped = db.get_mapped_receivers(s["id"])
+                total_ops += len(mapped)
+            total_ops = max(total_ops, 1)
+            completed = 0
 
-            for recv in batch_receivers:
+            for sender in active_senders:
                 if not st.session_state.warmup_running:
                     break
 
-                status_text.markdown(f"**Sending:** {sender['email']} → {recv['email']}...")
-
-                # Generate email
-                result = generate_email(recv["name"], tone, api_key)
-
-                if "error" in result:
-                    db.add_log(sender["email"], recv["email"], recv["name"], "", STATUS_FAILED, result["error"])
+                # Get mapped receivers for this sender
+                mapped_receivers = db.get_mapped_receivers(sender["id"])
+                if not mapped_receivers:
                     with log_area:
-                        st.error(f"🔴 AI generation failed for {recv['email']}: {result['error']}")
-                    completed += 1
+                        st.info(f"⏭️ {sender['email']} — no receivers mapped. Skipping.")
+                    continue
+
+                # Check daily limit
+                today_count = db.get_today_sent_count(sender["email"])
+                if today_count >= daily_limit:
+                    with log_area:
+                        st.warning(f"⏭️ {sender['email']} — daily limit reached ({today_count}/{daily_limit}). Skipping.")
+                    completed += len(mapped_receivers)
                     progress_bar.progress(min(completed / total_ops, 1.0))
                     continue
 
-                # Send email
-                send_result = send_email(
-                    sender["email"], sender["app_password"],
-                    recv["email"], result["subject"], result["body"],
-                )
+                for recv in mapped_receivers:
+                    if not st.session_state.warmup_running:
+                        break
 
-                db.add_log(
-                    sender["email"], recv["email"], recv["name"],
-                    result["subject"], send_result["status"],
-                    send_result.get("error"),
-                )
+                    # Re-check daily limit per email
+                    today_count = db.get_today_sent_count(sender["email"])
+                    if today_count >= daily_limit:
+                        with log_area:
+                            st.warning(f"⏭️ {sender['email']} — daily limit reached mid-round.")
+                        break
+
+                    status_text.markdown(
+                        f"**Round {current_round}** | Sending: {sender['email']} → {recv['email']}..."
+                    )
+
+                    # Generate AI email
+                    result = generate_email(recv["name"], tone, api_key)
+
+                    if "error" in result:
+                        db.add_log(sender["email"], recv["email"], recv["name"], "", STATUS_FAILED, result["error"])
+                        with log_area:
+                            st.error(f"🔴 AI error for {recv['email']}: {result['error']}")
+                        completed += 1
+                        progress_bar.progress(min(completed / total_ops, 1.0))
+                        continue
+
+                    # Send email
+                    send_result = send_email(
+                        sender["email"], sender["app_password"],
+                        recv["email"], result["subject"], result["body"],
+                    )
+
+                    db.add_log(
+                        sender["email"], recv["email"], recv["name"],
+                        result["subject"], send_result["status"],
+                        send_result.get("error"),
+                    )
+
+                    with log_area:
+                        if send_result["status"] == STATUS_SENT:
+                            st.success(f"🟢 R{current_round} | {sender['email']} → {recv['email']} | \"{result['subject']}\"")
+                        else:
+                            st.error(f"🔴 R{current_round} | {sender['email']} → {recv['email']} | {send_result.get('error', 'Unknown')}")
+
+                    completed += 1
+                    progress_bar.progress(min(completed / total_ops, 1.0))
+
+                    # Random delay between individual emails
+                    if st.session_state.warmup_running:
+                        delay_sec = get_delay_seconds(delay_min, random_delay_flag)
+                        if delay_sec > 0:
+                            status_text.markdown(f"⏳ Waiting **{delay_sec:.0f}s** before next email...")
+                            time.sleep(delay_sec)
+
+            # Round complete
+            progress_bar.progress(1.0)
+
+            # Gap between rounds (countdown timer)
+            if current_round < rounds_per_day and st.session_state.warmup_running:
+                gap_seconds = gap_minutes * 60
+                # Add ±10% randomness to gap
+                import random as rnd
+                gap_seconds = int(gap_seconds * rnd.uniform(0.9, 1.1))
 
                 with log_area:
-                    if send_result["status"] == STATUS_SENT:
-                        st.success(f"🟢 {sender['email']} → {recv['email']} | \"{result['subject']}\"")
-                    else:
-                        st.error(f"🔴 {sender['email']} → {recv['email']} | {send_result.get('error', 'Unknown error')}")
+                    st.info(f"✅ Round {current_round} complete! Next round in ~{gap_seconds // 60} minutes.")
 
-                completed += 1
-                progress_bar.progress(min(completed / total_ops, 1.0))
+                # Countdown timer
+                for remaining in range(gap_seconds, 0, -1):
+                    if not st.session_state.warmup_running:
+                        break
+                    mins, secs = divmod(remaining, 60)
+                    countdown_area.markdown(
+                        f"⏱️ **Next round in {mins:02d}:{secs:02d}** "
+                        f"(Round {current_round + 1}/{rounds_per_day})"
+                    )
+                    time.sleep(1)
 
-                # Delay between emails
-                if st.session_state.warmup_running:
-                    delay_sec = get_delay_seconds(delay_min, random_delay)
-                    if delay_sec > 0:
-                        status_text.markdown(f"⏳ Waiting **{delay_sec:.0f}s** before next email...")
-                        time.sleep(delay_sec)
+                countdown_area.empty()
 
-        # Done
+        # All rounds done
         st.session_state.warmup_running = False
         progress_bar.progress(1.0)
-        status_text.markdown("✅ **Warmup run complete!**")
+        round_header.empty()
+        status_text.markdown(f"✅ **All {rounds_per_day} rounds complete for today!**")
         st.balloons()
 
 
