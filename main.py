@@ -759,8 +759,11 @@ elif page == "🚀 Run Controls":
 
 elif page == "📋 Logs":
     st.markdown("# 📋 Email Logs")
-    st.markdown("View and filter all email sending activity.")
+    st.markdown("View, filter, and download all email sending activity.")
     st.markdown("---")
+
+    import pandas as pd
+    from io import BytesIO
 
     # Filters
     filter_cols = st.columns(3)
@@ -773,29 +776,64 @@ elif page == "📋 Logs":
 
     date_filter = filter_cols[2].date_input("Filter by Date", value=None)
 
-    # Fetch logs
+    # Fetch logs (limit raised to 5000 to keep history)
     logs = db.get_logs(
         sender_filter=sender_filter,
         date_filter=date_filter if date_filter else None,
         status_filter=status_filter,
+        limit=5000,
     )
 
-    st.markdown(f"**Showing {len(logs)} log entries**")
+    # Summary metrics
+    total = len(logs)
+    sent_count = sum(1 for l in logs if l.get("status") == "Sent")
+    failed_count = sum(1 for l in logs if l.get("status") == "Failed")
+
+    metric_cols = st.columns(3)
+    metric_cols[0].metric("Total Logs", total)
+    metric_cols[1].metric("✅ Sent", sent_count)
+    metric_cols[2].metric("❌ Failed", failed_count)
+
     st.markdown("---")
 
     if logs:
-        # Build display table
-        import pandas as pd
-
         df = pd.DataFrame(logs)
+
+        # CSV download columns
+        csv_cols = ["sender_email", "receiver_email", "subject", "status", "timestamp"]
+        csv_available = [c for c in csv_cols if c in df.columns]
+        csv_df = df[csv_available].copy()
+        csv_df.columns = ["Sender Email", "Receiver Email", "Subject", "Status", "Timestamp"][:len(csv_available)]
+
+        # Generate CSV
+        csv_buffer = BytesIO()
+        csv_df.to_csv(csv_buffer, index=False)
+        csv_data = csv_buffer.getvalue()
+
+        # Date label for filename
+        if date_filter:
+            fname = f"warmup_logs_{date_filter}.csv"
+        else:
+            fname = "warmup_logs_all.csv"
+
+        dl_cols = st.columns([3, 1])
+        dl_cols[0].markdown(f"**Showing {total} log entries**")
+        dl_cols[1].download_button(
+            label="📥 Download CSV",
+            data=csv_data,
+            file_name=fname,
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+        st.markdown("---")
+
+        # Display table
         display_cols = ["sender_email", "receiver_email", "subject", "status", "timestamp", "error"]
         available_cols = [c for c in display_cols if c in df.columns]
-        df = df[available_cols]
+        display_df = df[available_cols].copy()
+        display_df.columns = [c.replace("_", " ").title() for c in display_df.columns]
 
-        # Rename columns for display
-        df.columns = [c.replace("_", " ").title() for c in df.columns]
-
-        # Style the dataframe
         def highlight_status(val):
             if val == "Sent":
                 return "background-color: #0d7a3e; color: white; border-radius: 4px; padding: 2px 8px;"
@@ -803,7 +841,21 @@ elif page == "📋 Logs":
                 return "background-color: #c0392b; color: white; border-radius: 4px; padding: 2px 8px;"
             return ""
 
-        styled = df.style.applymap(highlight_status, subset=["Status"] if "Status" in df.columns else [])
+        styled = display_df.style.applymap(highlight_status, subset=["Status"] if "Status" in display_df.columns else [])
         st.dataframe(styled, use_container_width=True, hide_index=True)
+
+        # Group by date summary
+        if "timestamp" in df.columns:
+            st.markdown("---")
+            st.markdown("### 📊 Logs by Date")
+            df["date"] = df["timestamp"].str[:10]
+            date_summary = df.groupby("date").agg(
+                Total=("status", "count"),
+                Sent=("status", lambda x: (x == "Sent").sum()),
+                Failed=("status", lambda x: (x == "Failed").sum()),
+            ).reset_index()
+            date_summary.columns = ["Date", "Total", "Sent", "Failed"]
+            date_summary = date_summary.sort_values("Date", ascending=False)
+            st.dataframe(date_summary, use_container_width=True, hide_index=True)
     else:
         st.info("No logs found matching your filters.")
