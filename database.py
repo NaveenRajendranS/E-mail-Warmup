@@ -5,8 +5,11 @@ Handles CRUD for senders, receivers, settings, and logs.
 
 import sqlite3
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timezone, timedelta
 from config import DB_PATH, DEFAULT_SETTINGS
+
+# IST timezone (UTC+5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def get_connection():
@@ -438,7 +441,7 @@ def add_log(sender_email, receiver_email, receiver_name, subject, status, error=
         """INSERT INTO logs (sender_email, receiver_email, receiver_name, subject, status, error, timestamp)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (sender_email, receiver_email, receiver_name, subject, status, error,
-         datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+         datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")),
     )
     conn.commit()
     conn.close()

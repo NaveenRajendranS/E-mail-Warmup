@@ -10,7 +10,7 @@ SMTP_PORT = 587
 DEFAULT_SETTINGS = {
     "gemini_api_key": "",
     "batch_size": 5,
-    "delay_minutes": 2,
+    "delay_minutes": 0.5,
     "daily_limit": 20,
     "random_delay": True,
     "tone": "Casual",
