@@ -412,6 +412,11 @@ def get_settings():
         default = DEFAULT_SETTINGS.get(key)
         if isinstance(default, bool):
             settings[key] = val.lower() in ("true", "1", "yes")
+        elif isinstance(default, float):
+            try:
+                settings[key] = float(val)
+            except ValueError:
+                settings[key] = default
         elif isinstance(default, int):
             try:
                 settings[key] = int(val)
