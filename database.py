@@ -84,6 +84,8 @@ def init_db():
     # Pre-load sender and receiver accounts
     seed_senders()
     seed_receivers()
+    # Auto-map senders to receivers (only if no mappings exist for a sender)
+    auto_map_senders()
 
 
 # ── Seed Senders ─────────────────────────────────────────────
@@ -181,6 +183,55 @@ def seed_receivers():
             (name, email),
         )
     conn.commit()
+    conn.close()
+
+
+def auto_map_senders():
+    """Auto-assign 5 unique receivers to each sender that has no mappings.
+    Uses round-robin so each receiver is distributed fairly across senders."""
+    conn = get_connection()
+    c = conn.cursor()
+
+    senders = c.execute("SELECT id FROM senders ORDER BY id").fetchall()
+    receivers = c.execute("SELECT id FROM receivers ORDER BY id").fetchall()
+
+    if not senders or not receivers:
+        conn.close()
+        return
+
+    receiver_ids = [r["id"] for r in receivers]
+    num_receivers = len(receiver_ids)
+    receivers_per_sender = 5
+
+    offset = 0
+    mapped_any = False
+
+    for sender in senders:
+        sid = sender["id"]
+        # Skip if this sender already has mappings
+        existing = c.execute(
+            "SELECT COUNT(*) FROM sender_receiver_map WHERE sender_id = ?", (sid,)
+        ).fetchone()[0]
+        if existing > 0:
+            offset += receivers_per_sender
+            continue
+
+        # Pick 5 receivers using round-robin offset
+        assigned = []
+        for i in range(receivers_per_sender):
+            idx = (offset + i) % num_receivers
+            assigned.append(receiver_ids[idx])
+        offset += receivers_per_sender
+
+        for rid in assigned:
+            c.execute(
+                "INSERT OR IGNORE INTO sender_receiver_map (sender_id, receiver_id) VALUES (?, ?)",
+                (sid, rid),
+            )
+        mapped_any = True
+
+    if mapped_any:
+        conn.commit()
     conn.close()
 
 
