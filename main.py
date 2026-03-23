@@ -649,10 +649,10 @@ elif page == "🚀 Run Controls":
             from concurrent.futures import ThreadPoolExecutor, as_completed
             import threading
 
-            # Thread-safe counters and log collection
+            # Thread-safe counters and stop signal
             lock = threading.Lock()
             completed = [0]  # mutable for closure
-            log_messages = []  # collect log messages from threads
+            stop_event = threading.Event()  # thread-safe stop signal
 
             def send_for_sender(sender, mapped_receivers):
                 """Process all mapped receivers for one sender (runs in thread)."""
@@ -667,7 +667,7 @@ elif page == "🚀 Run Controls":
                     return results
 
                 for recv in mapped_receivers:
-                    if not st.session_state.warmup_running:
+                    if stop_event.is_set():
                         break
 
                     # Re-check daily limit
