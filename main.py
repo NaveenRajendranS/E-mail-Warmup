@@ -645,50 +645,45 @@ elif page == "🚀 Run Controls":
             total_ops = max(total_ops, 1)
             completed = 0
 
-            for sender in active_senders:
-                if not st.session_state.warmup_running:
-                    break
+            # ── Parallel sender execution ──────────────────
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            import threading
 
-                # Get mapped receivers for this sender
-                mapped_receivers = db.get_mapped_receivers(sender["id"])
-                if not mapped_receivers:
-                    with log_area:
-                        st.info(f"⏭️ {sender['email']} — no receivers mapped. Skipping.")
-                    continue
+            # Thread-safe counters and log collection
+            lock = threading.Lock()
+            completed = [0]  # mutable for closure
+            log_messages = []  # collect log messages from threads
+
+            def send_for_sender(sender, mapped_receivers):
+                """Process all mapped receivers for one sender (runs in thread)."""
+                results = []
 
                 # Check daily limit
                 today_count = db.get_today_sent_count(sender["email"])
                 if today_count >= daily_limit:
-                    with log_area:
-                        st.warning(f"⏭️ {sender['email']} — daily limit reached ({today_count}/{daily_limit}). Skipping.")
-                    completed += len(mapped_receivers)
-                    progress_bar.progress(min(completed / total_ops, 1.0))
-                    continue
+                    results.append(("warning", f"⏭️ {sender['email']} — daily limit reached ({today_count}/{daily_limit}). Skipping."))
+                    with lock:
+                        completed[0] += len(mapped_receivers)
+                    return results
 
                 for recv in mapped_receivers:
                     if not st.session_state.warmup_running:
                         break
 
-                    # Re-check daily limit per email
+                    # Re-check daily limit
                     today_count = db.get_today_sent_count(sender["email"])
                     if today_count >= daily_limit:
-                        with log_area:
-                            st.warning(f"⏭️ {sender['email']} — daily limit reached mid-round.")
+                        results.append(("warning", f"⏭️ {sender['email']} — daily limit reached mid-round."))
                         break
-
-                    status_text.markdown(
-                        f"**Round {current_round}** | Sending: {sender['email']} → {recv['email']}..."
-                    )
 
                     # Generate AI email
                     result = generate_email(recv["name"], tone, api_key)
 
                     if "error" in result:
                         db.add_log(sender["email"], recv["email"], recv["name"], "", STATUS_FAILED, result["error"])
-                        with log_area:
-                            st.error(f"🔴 AI error for {recv['email']}: {result['error']}")
-                        completed += 1
-                        progress_bar.progress(min(completed / total_ops, 1.0))
+                        results.append(("error", f"🔴 AI error for {sender['email']} → {recv['email']}: {result['error']}"))
+                        with lock:
+                            completed[0] += 1
                         continue
 
                     # Send email
@@ -703,21 +698,60 @@ elif page == "🚀 Run Controls":
                         send_result.get("error"),
                     )
 
+                    if send_result["status"] == STATUS_SENT:
+                        results.append(("success", f"🟢 R{current_round} | {sender['email']} → {recv['email']} | \"{result['subject']}\""))
+                    else:
+                        results.append(("error", f"🔴 R{current_round} | {sender['email']} → {recv['email']} | {send_result.get('error', 'Unknown')}"))
+
+                    with lock:
+                        completed[0] += 1
+
+                    # Small delay between receivers within a sender (to avoid rate limiting)
+                    delay_sec = get_delay_seconds(delay_min, random_delay_flag)
+                    if delay_sec > 0:
+                        time.sleep(delay_sec)
+
+                return results
+
+            # Build task list
+            sender_tasks = []
+            for sender in active_senders:
+                mapped = db.get_mapped_receivers(sender["id"])
+                if not mapped:
                     with log_area:
-                        if send_result["status"] == STATUS_SENT:
-                            st.success(f"🟢 R{current_round} | {sender['email']} → {recv['email']} | \"{result['subject']}\"")
-                        else:
-                            st.error(f"🔴 R{current_round} | {sender['email']} → {recv['email']} | {send_result.get('error', 'Unknown')}")
+                        st.info(f"⏭️ {sender['email']} — no receivers mapped. Skipping.")
+                    continue
+                sender_tasks.append((sender, mapped))
 
-                    completed += 1
-                    progress_bar.progress(min(completed / total_ops, 1.0))
+            status_text.markdown(
+                f"**Round {current_round}** | Sending from **{len(sender_tasks)} senders** in parallel..."
+            )
 
-                    # Random delay between individual emails
-                    if st.session_state.warmup_running:
-                        delay_sec = get_delay_seconds(delay_min, random_delay_flag)
-                        if delay_sec > 0:
-                            status_text.markdown(f"⏳ Waiting **{delay_sec:.0f}s** before next email...")
-                            time.sleep(delay_sec)
+            # Launch all senders in parallel
+            with ThreadPoolExecutor(max_workers=min(len(sender_tasks), 15)) as executor:
+                futures = {
+                    executor.submit(send_for_sender, sender, mapped): sender
+                    for sender, mapped in sender_tasks
+                }
+
+                for future in as_completed(futures):
+                    sender = futures[future]
+                    try:
+                        results = future.result()
+                        for msg_type, msg in results:
+                            with log_area:
+                                if msg_type == "success":
+                                    st.success(msg)
+                                elif msg_type == "error":
+                                    st.error(msg)
+                                elif msg_type == "warning":
+                                    st.warning(msg)
+                    except Exception as e:
+                        with log_area:
+                            st.error(f"🔴 Thread error for {sender['email']}: {e}")
+
+                    # Update progress
+                    progress_bar.progress(min(completed[0] / total_ops, 1.0))
 
             # Round complete
             progress_bar.progress(1.0)

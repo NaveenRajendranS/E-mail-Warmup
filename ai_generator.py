@@ -92,8 +92,10 @@ Rules:
 - Do NOT include a sign-off or signature
 - Do NOT use marketing or promotional language
 - Make it sound like a real quick message between coworkers
+- Do NOT use any emojis
+- Use the above as examples only
 
-Return ONLY in this exact format (nothing else):
+Return in the above format (nothing else):
 SUBJECT: <subject line>
 BODY: <email body>"""
 
