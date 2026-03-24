@@ -238,6 +238,42 @@ def auto_map_senders():
     conn.close()
 
 
+def randomize_all_mappings(receivers_per_sender=5):
+    """Clear all mappings and randomly assign receivers to each sender."""
+    import random
+
+    conn = get_connection()
+    c = conn.cursor()
+
+    senders = c.execute("SELECT id FROM senders ORDER BY id").fetchall()
+    receivers = c.execute("SELECT id FROM receivers ORDER BY id").fetchall()
+
+    if not senders or not receivers:
+        conn.close()
+        return
+
+    receiver_ids = [r["id"] for r in receivers]
+
+    # Clear all existing mappings
+    c.execute("DELETE FROM sender_receiver_map")
+
+    for sender in senders:
+        sid = sender["id"]
+        # Shuffle a copy of receiver IDs and pick the first N
+        shuffled = receiver_ids.copy()
+        random.shuffle(shuffled)
+        assigned = shuffled[:receivers_per_sender]
+
+        for rid in assigned:
+            c.execute(
+                "INSERT OR IGNORE INTO sender_receiver_map (sender_id, receiver_id) VALUES (?, ?)",
+                (sid, rid),
+            )
+
+    conn.commit()
+    conn.close()
+
+
 # ── Sender CRUD ──────────────────────────────────────────────
 
 def get_all_senders():

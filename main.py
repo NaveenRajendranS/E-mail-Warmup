@@ -355,6 +355,15 @@ elif page == "📥 Receivers":
 elif page == "🔗 Mapping":
     st.markdown("# 🔗 Sender → Receiver Mapping")
     st.markdown("Assign up to 5 receivers to each sender. Click a sender card to manage its receivers.")
+
+    # Refresh / Shuffle button
+    btn_col1, btn_col2 = st.columns([1, 5])
+    with btn_col1:
+        if st.button("🔀 Shuffle All Mappings", use_container_width=True, type="primary"):
+            db.randomize_all_mappings()
+            st.success("✅ All mappings have been randomly shuffled!")
+            st.rerun()
+
     st.markdown("---")
 
     senders = db.get_all_senders()
