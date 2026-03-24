@@ -84,11 +84,19 @@ def init_db():
     conn.commit()
     conn.close()
 
-    # Pre-load sender and receiver accounts
-    seed_senders()
-    seed_receivers()
-    # Auto-map senders to receivers (only if no mappings exist for a sender)
-    auto_map_senders()
+    # Pre-load sender and receiver accounts (only on first run)
+    conn2 = get_connection()
+    seeded = conn2.execute("SELECT value FROM settings WHERE key = 'seeded'").fetchone()
+    conn2.close()
+
+    if not seeded:
+        seed_senders()
+        seed_receivers()
+        auto_map_senders()
+        conn2 = get_connection()
+        conn2.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('seeded', 'true')")
+        conn2.commit()
+        conn2.close()
 
 
 # ── Seed Senders ─────────────────────────────────────────────
