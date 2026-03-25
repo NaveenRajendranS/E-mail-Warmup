@@ -21,9 +21,6 @@ DEFAULT_SETTINGS = {
 # Tone options for email generation
 TONE_OPTIONS = ["Casual", "Friendly", "Internal office"]
 
-# Database file
-DB_PATH = "warmup.db"
-
 # Log statuses
 STATUS_SENT = "Sent"
 STATUS_FAILED = "Failed"
