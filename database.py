@@ -102,7 +102,6 @@ def init_db():
 
 # (email, app_password, active)
 SEED_SENDERS = [
-    ("admin@reimaginehome.app", "CHANGE_ME", 0),
     ("sopia@reimaginehome.app", "CHANGE_ME", 0),
     ("alex@reimaginehome.app", "CHANGE_ME", 0),
     ("jason@reimaginehome.app", "CHANGE_ME", 0),
@@ -112,7 +111,6 @@ SEED_SENDERS = [
     ("tiffany@reimaginehome.app", "CHANGE_ME", 0),
     ("chris@reimaginehome.app", "CHANGE_ME", 0),
     ("melissa@reimaginehome.app", "CHANGE_ME", 0),
-    ("admin@reimaginehome.tech", "CHANGE_ME", 0),
     ("valentina@reimaginehome.tech", "CHANGE_ME", 0),
     ("lucas@reimaginehome.tech", "CHANGE_ME", 0),
     ("amelia@reimaginehome.tech", "CHANGE_ME", 0),
@@ -122,7 +120,6 @@ SEED_SENDERS = [
     ("jade@reimaginehome.tech", "CHANGE_ME", 0),
     ("valencia@reimaginehome.tech", "CHANGE_ME", 0),
     ("luke@reimaginehome.tech", "CHANGE_ME", 0),
-    ("admin@reimaginehome.homes", "CHANGE_ME", 0),
     ("olivia@reimaginehome.homes", "CHANGE_ME", 0),
     ("lena@reimaginehome.homes", "CHANGE_ME", 0),
     ("daniel@reimaginehome.homes", "CHANGE_ME", 0),
@@ -344,6 +341,20 @@ def delete_sender(sender_id):
 def toggle_sender(sender_id, active):
     conn = get_connection()
     conn.execute("UPDATE senders SET active = ? WHERE id = ?", (int(active), sender_id))
+    conn.commit()
+    conn.close()
+
+
+def activate_all_senders():
+    conn = get_connection()
+    conn.execute("UPDATE senders SET active = 1")
+    conn.commit()
+    conn.close()
+
+
+def deactivate_all_senders():
+    conn = get_connection()
+    conn.execute("UPDATE senders SET active = 0")
     conn.commit()
     conn.close()
 

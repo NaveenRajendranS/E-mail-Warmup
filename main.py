@@ -196,6 +196,19 @@ elif page == "📤 Senders":
     mc2.metric("Active", active_senders)
     mc3.metric("Inactive", inactive_senders)
 
+    # Bulk actions
+    btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 4])
+    with btn_col1:
+        if st.button("✅ Activate All", use_container_width=True, type="primary"):
+            db.activate_all_senders()
+            st.success("All senders activated!")
+            st.rerun()
+    with btn_col2:
+        if st.button("⛔ Deactivate All", use_container_width=True):
+            db.deactivate_all_senders()
+            st.success("All senders deactivated!")
+            st.rerun()
+
     st.markdown("---")
 
     # Add Sender
