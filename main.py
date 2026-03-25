@@ -185,6 +185,17 @@ if page == "📊 Dashboard":
 elif page == "📤 Senders":
     st.markdown("# 📤 Sender Management")
     st.markdown("Manage your Gmail sender accounts for warmup.")
+
+    # Summary metrics
+    all_senders = db.get_all_senders()
+    total_senders = len(all_senders)
+    active_senders = sum(1 for s in all_senders if s["active"])
+    inactive_senders = total_senders - active_senders
+    mc1, mc2, mc3 = st.columns(3)
+    mc1.metric("Total Senders", total_senders)
+    mc2.metric("Active", active_senders)
+    mc3.metric("Inactive", inactive_senders)
+
     st.markdown("---")
 
     # Add Sender
@@ -277,6 +288,12 @@ elif page == "📤 Senders":
 elif page == "📥 Receivers":
     st.markdown("# 📥 Receiver Management")
     st.markdown("Manage the list of receiver email addresses.")
+
+    # Summary metrics
+    all_receivers = db.get_all_receivers()
+    mc1, = st.columns(1)
+    mc1.metric("Total Receivers", len(all_receivers))
+
     st.markdown("---")
 
     # Add Receiver
