@@ -1,4 +1,4 @@
-"""
+﻿"""
 PostgreSQL (Supabase) database layer for the Email Warmup System.
 Handles CRUD for senders, receivers, settings, and logs.
 """
@@ -27,14 +27,37 @@ def get_database_url():
     return os.environ.get("DATABASE_URL", "")
 
 
-def get_connection():
-    """Get a PostgreSQL connection with dict cursor support."""
+def _create_connection():
+    """Create a new PostgreSQL connection."""
     url = get_database_url()
     if not url:
         raise RuntimeError("DATABASE_URL not configured. Add it to Streamlit secrets or environment.")
     conn = psycopg2.connect(url)
     conn.autocommit = False
     return conn
+
+
+# Cache a single connection per app session
+_cached_conn = None
+
+
+def get_connection():
+    """Get a reusable PostgreSQL connection (auto-reconnects if stale)."""
+    global _cached_conn
+    try:
+        if _cached_conn is None or _cached_conn.closed:
+            _cached_conn = _create_connection()
+        else:
+            # Test if connection is still alive
+            _cached_conn.cursor().execute("SELECT 1")
+            _cached_conn.rollback()  # discard the test query
+    except Exception:
+        try:
+            _cached_conn.close()
+        except Exception:
+            pass
+        _cached_conn = _create_connection()
+    return _cached_conn
 
 
 def init_db():
@@ -98,14 +121,14 @@ def init_db():
         )
 
     conn.commit()
-    conn.close()
+
 
     # Pre-load sender and receiver accounts (only on first run)
     conn2 = get_connection()
     c2 = conn2.cursor()
     c2.execute("SELECT value FROM settings WHERE key = 'seeded'")
     seeded = c2.fetchone()
-    conn2.close()
+
 
     if not seeded:
         seed_senders()
@@ -115,10 +138,10 @@ def init_db():
         c2 = conn2.cursor()
         c2.execute("INSERT INTO settings (key, value) VALUES ('seeded', 'true') ON CONFLICT (key) DO NOTHING")
         conn2.commit()
-        conn2.close()
 
 
-# ── Seed Senders ─────────────────────────────────────────────
+
+# â”€â”€ Seed Senders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 SEED_SENDERS = [
     "admin@reimaginehome.app",
@@ -164,10 +187,10 @@ def seed_senders():
             (email, "CHANGE_ME", 0),
         )
     conn.commit()
-    conn.close()
 
 
-# ── Seed Receivers ───────────────────────────────────────────
+
+# â”€â”€ Seed Receivers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 SEED_RECEIVERS = [
     "prithvir.1011@gmail.com",
@@ -215,7 +238,7 @@ def seed_receivers():
             (name, email),
         )
     conn.commit()
-    conn.close()
+
 
 
 def auto_map_senders():
@@ -230,7 +253,7 @@ def auto_map_senders():
     receivers = c.fetchall()
 
     if not senders or not receivers:
-        conn.close()
+
         return
 
     receiver_ids = [r["id"] for r in receivers]
@@ -267,7 +290,7 @@ def auto_map_senders():
 
     if mapped_any:
         conn.commit()
-    conn.close()
+
 
 
 def randomize_all_mappings(receivers_per_sender=5):
@@ -283,7 +306,7 @@ def randomize_all_mappings(receivers_per_sender=5):
     receivers = c.fetchall()
 
     if not senders or not receivers:
-        conn.close()
+
         return
 
     receiver_ids = [r["id"] for r in receivers]
@@ -305,17 +328,17 @@ def randomize_all_mappings(receivers_per_sender=5):
             )
 
     conn.commit()
-    conn.close()
 
 
-# ── Sender CRUD ──────────────────────────────────────────────
+
+# â”€â”€ Sender CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def get_all_senders():
     conn = get_connection()
     c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     c.execute("SELECT * FROM senders ORDER BY id")
     rows = c.fetchall()
-    conn.close()
+
     return [dict(r) for r in rows]
 
 
@@ -324,7 +347,7 @@ def get_active_senders():
     c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     c.execute("SELECT * FROM senders WHERE active = 1 ORDER BY id")
     rows = c.fetchall()
-    conn.close()
+
     return [dict(r) for r in rows]
 
 
@@ -342,7 +365,7 @@ def add_sender(email, app_password):
         conn.rollback()
         return False, "Sender email already exists."
     finally:
-        conn.close()
+
 
 
 def update_sender(sender_id, email, app_password, active):
@@ -359,7 +382,7 @@ def update_sender(sender_id, email, app_password, active):
         conn.rollback()
         return False, "Another sender with that email already exists."
     finally:
-        conn.close()
+
 
 
 def delete_sender(sender_id):
@@ -368,7 +391,7 @@ def delete_sender(sender_id):
     c.execute("DELETE FROM sender_receiver_map WHERE sender_id = %s", (sender_id,))
     c.execute("DELETE FROM senders WHERE id = %s", (sender_id,))
     conn.commit()
-    conn.close()
+
 
 
 def toggle_sender(sender_id, active):
@@ -376,17 +399,17 @@ def toggle_sender(sender_id, active):
     c = conn.cursor()
     c.execute("UPDATE senders SET active = %s WHERE id = %s", (int(active), sender_id))
     conn.commit()
-    conn.close()
 
 
-# ── Receiver CRUD ────────────────────────────────────────────
+
+# â”€â”€ Receiver CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def get_all_receivers():
     conn = get_connection()
     c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     c.execute("SELECT * FROM receivers ORDER BY id")
     rows = c.fetchall()
-    conn.close()
+
     return [dict(r) for r in rows]
 
 
@@ -404,7 +427,7 @@ def add_receiver(name, email):
         conn.rollback()
         return False, "Receiver email already exists."
     finally:
-        conn.close()
+
 
 
 def update_receiver(receiver_id, name, email):
@@ -421,7 +444,7 @@ def update_receiver(receiver_id, name, email):
         conn.rollback()
         return False, "Another receiver with that email already exists."
     finally:
-        conn.close()
+
 
 
 def delete_receiver(receiver_id):
@@ -430,10 +453,10 @@ def delete_receiver(receiver_id):
     c.execute("DELETE FROM sender_receiver_map WHERE receiver_id = %s", (receiver_id,))
     c.execute("DELETE FROM receivers WHERE id = %s", (receiver_id,))
     conn.commit()
-    conn.close()
 
 
-# ── Sender-Receiver Mapping ──────────────────────────────────
+
+# â”€â”€ Sender-Receiver Mapping â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def get_mapped_receivers(sender_id):
     """Get receivers mapped to a specific sender."""
@@ -446,7 +469,7 @@ def get_mapped_receivers(sender_id):
         ORDER BY r.id
     """, (sender_id,))
     rows = c.fetchall()
-    conn.close()
+
     return [dict(r) for r in rows]
 
 
@@ -459,7 +482,7 @@ def get_mapped_receiver_ids(sender_id):
         (sender_id,),
     )
     rows = c.fetchall()
-    conn.close()
+
     return [r["receiver_id"] for r in rows]
 
 
@@ -474,7 +497,7 @@ def set_sender_mappings(sender_id, receiver_ids):
             (sender_id, rid),
         )
     conn.commit()
-    conn.close()
+
 
 
 def get_all_mappings():
@@ -489,18 +512,18 @@ def get_all_mappings():
         ORDER BY m.sender_id, m.receiver_id
     """)
     rows = c.fetchall()
-    conn.close()
+
     return [dict(r) for r in rows]
 
 
-# ── Settings ─────────────────────────────────────────────────
+# â”€â”€ Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def get_settings():
     conn = get_connection()
     c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     c.execute("SELECT * FROM settings")
     rows = c.fetchall()
-    conn.close()
+
     settings = {}
     for r in rows:
         key = r["key"]
@@ -533,10 +556,10 @@ def save_settings(settings_dict):
             (key, str(value)),
         )
     conn.commit()
-    conn.close()
 
 
-# ── Logs ─────────────────────────────────────────────────────
+
+# â”€â”€ Logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def add_log(sender_email, receiver_email, receiver_name, subject, status, error=None):
     conn = get_connection()
@@ -548,7 +571,7 @@ def add_log(sender_email, receiver_email, receiver_name, subject, status, error=
          datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")),
     )
     conn.commit()
-    conn.close()
+
 
 
 def get_logs(sender_filter=None, date_filter=None, status_filter=None, limit=200):
@@ -574,7 +597,7 @@ def get_logs(sender_filter=None, date_filter=None, status_filter=None, limit=200
 
     c.execute(query, params)
     rows = c.fetchall()
-    conn.close()
+
     return [dict(r) for r in rows]
 
 
@@ -593,7 +616,7 @@ def get_today_sent_count(sender_email=None):
             (today,),
         )
     row = c.fetchone()
-    conn.close()
+
     return row["cnt"] if row else 0
 
 
@@ -606,7 +629,7 @@ def get_today_failed_count():
         (today,),
     )
     row = c.fetchone()
-    conn.close()
+
     return row["cnt"] if row else 0
 
 
@@ -617,7 +640,7 @@ def get_last_run_time():
         "SELECT timestamp FROM logs ORDER BY id DESC LIMIT 1"
     )
     row = c.fetchone()
-    conn.close()
+
     return row["timestamp"] if row else "Never"
 
 
@@ -626,4 +649,4 @@ def clear_logs():
     c = conn.cursor()
     c.execute("DELETE FROM logs")
     conn.commit()
-    conn.close()
+
