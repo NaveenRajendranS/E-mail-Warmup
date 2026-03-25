@@ -304,8 +304,26 @@ elif page == "📥 Receivers":
 
     # Summary metrics
     all_receivers = db.get_all_receivers()
-    mc1, = st.columns(1)
-    mc1.metric("Total Receivers", len(all_receivers))
+    total_receivers = len(all_receivers)
+    active_receivers = sum(1 for r in all_receivers if r.get("active", 1))
+    inactive_receivers = total_receivers - active_receivers
+    mc1, mc2, mc3 = st.columns(3)
+    mc1.metric("Total Receivers", total_receivers)
+    mc2.metric("Active", active_receivers)
+    mc3.metric("Inactive", inactive_receivers)
+
+    # Bulk actions
+    btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 4])
+    with btn_col1:
+        if st.button("✅ Activate All", use_container_width=True, type="primary", key="activate_all_recv"):
+            db.activate_all_receivers()
+            st.success("All receivers activated!")
+            st.rerun()
+    with btn_col2:
+        if st.button("⛔ Deactivate All", use_container_width=True, key="deactivate_all_recv"):
+            db.deactivate_all_receivers()
+            st.success("All receivers deactivated!")
+            st.rerun()
 
     st.markdown("---")
 
@@ -344,17 +362,26 @@ elif page == "📥 Receivers":
                 color = get_avatar_color(recv["email"])
 
                 with col:
+                    is_active = recv.get("active", 1)
+                    status_badge = ""
+                    if not is_active:
+                        status_badge = '<div style="color:#ef4444;font-size:0.75rem;margin-top:4px;">⛔ Inactive</div>'
+
                     st.markdown(
-                        render_profile_card(letter, recv["name"], recv["email"], color),
+                        render_profile_card(letter, recv["name"], recv["email"], color, extra_html=status_badge),
                         unsafe_allow_html=True,
                     )
 
                     # Action buttons
-                    b1, b2 = st.columns(2)
+                    b1, b2, b3 = st.columns(3)
                     if b1.button("✏️ Edit", key=f"edit_r_{recv['id']}"):
                         st.session_state[f"editing_receiver_{recv['id']}"] = True
                     if b2.button("🗑️ Del", key=f"del_r_{recv['id']}"):
                         db.delete_receiver(recv["id"])
+                        st.rerun()
+                    toggle_label = "⛔" if is_active else "✅"
+                    if b3.button(toggle_label, key=f"toggle_r_{recv['id']}"):
+                        db.toggle_receiver(recv["id"], not is_active)
                         st.rerun()
 
                     # Edit form

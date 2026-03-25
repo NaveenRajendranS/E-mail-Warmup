@@ -46,9 +46,16 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
+            active INTEGER DEFAULT 1,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # Migration: add active column to receivers if missing
+    try:
+        c.execute("ALTER TABLE receivers ADD COLUMN active INTEGER DEFAULT 1")
+    except Exception:
+        pass
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS logs (
@@ -109,34 +116,50 @@ def init_db():
 
 # (name, email, app_password, active)
 SEED_SENDERS = [
-    ("Sopia Carter", "sopia@reimaginehome.app", "CHANGE_ME", 0),
-    ("Alex Morgan", "alex@reimaginehome.app", "CHANGE_ME", 0),
-    ("Jason Perry", "jason@reimaginehome.app", "CHANGE_ME", 0),
-    ("Emily Brooks", "emily@reimaginehome.app", "CHANGE_ME", 0),
-    ("Henan Davis", "henan@reimaginehome.app", "CHANGE_ME", 0),
-    ("Desiree Hall", "desiree@reimaginehome.app", "CHANGE_ME", 0),
-    ("Tiffany Ross", "tiffany@reimaginehome.app", "CHANGE_ME", 0),
-    ("Chris Taylor", "chris@reimaginehome.app", "CHANGE_ME", 0),
-    ("Melissa Ward", "melissa@reimaginehome.app", "CHANGE_ME", 0),
-    ("Valentina Cruz", "valentina@reimaginehome.tech", "CHANGE_ME", 0),
-    ("Lucas Bennett", "lucas@reimaginehome.tech", "CHANGE_ME", 0),
-    ("Amelia Fisher", "amelia@reimaginehome.tech", "CHANGE_ME", 0),
-    ("Ryan Cooper", "ryan@reimaginehome.tech", "CHANGE_ME", 0),
-    ("Helen Grant", "helen@reimaginehome.tech", "CHANGE_ME", 0),
-    ("Barbara Stone", "barbara@reimaginehome.tech", "CHANGE_ME", 0),
-    ("Jade Mitchell", "jade@reimaginehome.tech", "CHANGE_ME", 0),
-    ("Valencia Reed", "valencia@reimaginehome.tech", "CHANGE_ME", 0),
-    ("Luke Palmer", "luke@reimaginehome.tech", "CHANGE_ME", 0),
-    ("Olivia Hayes", "olivia@reimaginehome.homes", "CHANGE_ME", 0),
-    ("Lena Foster", "lena@reimaginehome.homes", "CHANGE_ME", 0),
-    ("Daniel Scott", "daniel@reimaginehome.homes", "CHANGE_ME", 0),
-    ("Elena Rivera", "elena@reimaginehome.homes", "CHANGE_ME", 0),
-    ("Ben Walker", "ben@reimaginehome.homes", "CHANGE_ME", 0),
-    ("Jennifer Cole", "jennifer@reimaginehome.homes", "CHANGE_ME", 0),
-    ("Shelly Adams", "shelly@reimaginehome.homes", "CHANGE_ME", 0),
-    ("Kimberley Price", "kimberley@reimaginehome.homes", "CHANGE_ME", 0),
-    ("Stephan Blake", "stephan@reimaginehome.homes", "CHANGE_ME", 0),
-    # reimaginehome.net senders
+    # reimaginehome.shop
+    ("Bill Harrison", "bill@reimaginehome.shop", "qgbk nmwg ffwa tqwk", 1),
+    ("Shital Gohil", "shitalgohil@reimaginehome.shop", "kkgm ajcj hxqw xhbd", 1),
+    ("Christina Lane", "christina@reimaginehome.shop", "ulok lnwy krxl kltc", 1),
+    ("Christie Evans", "christie@reimaginehome.shop", "jgrn weyi odqx ahcc", 1),
+    ("Ava Turner", "ava@reimaginehome.shop", "qljc yymu rgqm ggf", 1),
+    ("Noah Sanders", "noah@reimaginehome.shop", "tnar qslz fekv yogp", 1),
+    ("Akhilesh Majumdar", "akhileshmajumdar@reimaginehome.shop", "aqik xflb xdes oebv", 1),
+    ("Akhilesh M", "akhileshm@reimaginehome.shop", "kyga cfox sjnu apyu", 1),
+    ("Shital G", "shitalg@reimaginehome.shop", "uduh belb eufw buco", 1),
+    # reimaginehome.app
+    ("Tayne Parker", "tayne@reimaginehome.app", "wbuq dqal pmqt fnuc", 1),
+    ("Sopia Carter", "sopia@reimaginehome.app", "vpsv dlrj dmfd ydag", 1),
+    ("Alex Morgan", "alex@reimaginehome.app", "sobi mvoa jxmu afwp", 1),
+    ("Jason Perry", "jason@reimaginehome.app", "pkqo kvtf sxwy ncsh", 1),
+    ("Emily Brooks", "emily@reimaginehome.app", "xsof dcnp anos bntq", 1),
+    ("Henan Davis", "henan@reimaginehome.app", "cljh cgfw fkdk qczm", 1),
+    ("Desiree Hall", "desiree@reimaginehome.app", "bpgc hvws eaxu mtcp", 1),
+    ("Tiffany Ross", "tiffany@reimaginehome.app", "ykkv dwob zydq xnot", 1),
+    ("Chris Taylor", "chris@reimaginehome.app", "rhss mwjm gmhe snkl", 1),
+    ("Melissa Ward", "melissa@reimaginehome.app", "fsek mhia tiiy xcnp", 1),
+    # reimaginehome.tech
+    ("Jeroen Vries", "jeroen@reimaginehome.tech", "sgix bkyz fwnw kacb", 1),
+    ("Valentina Cruz", "valentina@reimaginehome.tech", "igmq woeh kqvu bwcr", 1),
+    ("Lucas Bennett", "lucas@reimaginehome.tech", "wfyu bzvp nqgt ifhe", 1),
+    ("Amelia Fisher", "amelia@reimaginehome.tech", "xnzt yuli digp dqvd", 1),
+    ("Ryan Cooper", "ryan@reimaginehome.tech", "ecxt enlw afnz ljt", 1),
+    ("Helen Grant", "helen@reimaginehome.tech", "faah uxsm btxv soxt", 1),
+    ("Barbara Stone", "barbara@reimaginehome.tech", "aqvm vfkf yveg vzhu", 1),
+    ("Jade Mitchell", "jade@reimaginehome.tech", "eodu gpnk kngx pkze", 1),
+    ("Valencia Reed", "valencia@reimaginehome.tech", "jyeu cpxz gttq zqrx", 1),
+    ("Luke Palmer", "luke@reimaginehome.tech", "uhno lcsz upaq jktk", 1),
+    # reimaginehome.homes
+    ("Diego Reyes", "diego@reimaginehome.homes", "bypt sdfi uboj rspe", 1),
+    ("Olivia Hayes", "olivia@reimaginehome.homes", "xbjj qzhy yzgf oqwc", 1),
+    ("Lena Foster", "lena@reimaginehome.homes", "plyp tinn yjne uhxd", 1),
+    ("Daniel Scott", "daniel@reimaginehome.homes", "lvqu qkad lyor svzo", 1),
+    ("Elena Rivera", "elena@reimaginehome.homes", "yulw ionu xueq ejzx", 1),
+    ("Ben Walker", "ben@reimaginehome.homes", "oghl gnmf swda wbhf", 1),
+    ("Jennifer Cole", "jennifer@reimaginehome.homes", "okao irni tdtt jdht", 1),
+    ("Shelly Adams", "shelly@reimaginehome.homes", "kiag crjp xiuy qyly", 1),
+    ("Kimberley Price", "kimberley@reimaginehome.homes", "sqsq orhn oouh otbt", 1),
+    ("Stephan Blake", "stephan@reimaginehome.homes", "dsod fcpf enps qeve", 1),
+    # reimaginehome.net
     ("Akhilesh Majumdar", "akhilesh.majumdar@reimaginehome.net", "lkdf crxq acgq unyr", 1),
     ("M Akhilesh", "m.akhilesh@reimaginehome.net", "dxnv nowf geyn uiny", 1),
     ("Gohil Shital", "gohilshital@reimaginehome.net", "uvss atnu stms hcxe", 1),
@@ -167,43 +190,59 @@ def seed_senders():
 
 # ── Seed Receivers ───────────────────────────────────────────
 
+# (name, email)
 SEED_RECEIVERS = [
-    "prithvi.r3957@gmail.com",
-    "prithvi.gowda21@gmail.com",
-    "prithvi.gowda1999@gmail.com",
-    "test.automation.styldod@gmail.com",
-    "rohit.a.thorat@gmail.com",
-    "rothorat7779@gmail.com",
-    "jkomal9797@gmail.com",
-    "sladewinter@gmail.com",
-    "shital.nid@gmail.com",
-    "deepakpandey7100@gmail.com",
-    "craftsointeriors@gmail.com",
-    "arulpradeep95@gmail.com",
-    "arulpradeep05@gmail.com",
-    "komalrohan9797@gmail.com",
-    "mbc261996@gmail.com",
-    "editzpituresque@gmail.com",
-    "rewritingtheera@gmail.com",
-    "arulpradeepp05@icloud.com",
-    "ramyakrishna3024@gmail.com",
-    "abhishek.rath85@gmail.com",
-    "henanmaliyakkal@gmail.com",
-    "amalyaaamz@gmail.com",
-    "Amalyashaji926@gmail.com",
-    "amalyabackup0@gmail.com",
-    "wave.crest444@gmail.com",
-    "akash.shitole.5595@gmail.com",
-    "akash.shitole.5902@gmail.com",
-    "akash.shitole.0509@gmail.com",
+    ("Prithvi", "prithvi.r3957@gmail.com"),
+    ("Prithvi", "prithvi.gowda21@gmail.com"),
+    ("Prithvi", "prithvi.pr1011@gmail.com"),
+    ("Prithvi", "prithvi.gowda1999@gmail.com"),
+    ("Rohit", "rohit.a.thorat@gmail.com"),
+    ("Rohit", "rothorat7779@gmail.com"),
+    ("Slade Winter", "sladewinter@gmail.com"),
+    ("Deepak", "deepakpandey7100@gmail.com"),
+    ("Arul", "arulpradeep95@gmail.com"),
+    ("Arul", "arulpradeep05@gmail.com"),
+    ("Manju", "mbc261996@gmail.com"),
+    ("Manju", "editzpituresque@gmail.com"),
+    ("Theera", "rewritingtheera@gmail.com"),
+    ("Arul", "arulpradeepp05@icloud.com"),
+    ("Ramya", "ramyakrishna3024@gmail.com"),
+    ("Abhishek Rath", "abhishek.rath85@gmail.com"),
+    ("Henan", "henanmaliyakkal@gmail.com"),
+    ("Amalya", "amalyaaamz@gmail.com"),
+    ("Amalya", "Amalyashaji926@gmail.com"),
+    ("Amalya", "amalyabackup0@gmail.com"),
+    ("Wave", "wave.crest444@gmail.com"),
+    ("Akash", "akash.shitole.5595@gmail.com"),
+    ("Akash", "akash.shitole.5902@gmail.com"),
+    ("Akash", "akash.shitole.0509@gmail.com"),
+    ("Geethu", "geetu.chaurasiya@styldod.com"),
+    ("Prithvi", "prithvi@styldod.com"),
+    ("Samardip", "samardip.mandal@styldod.com"),
+    ("Akash", "akash.shitole@styldod.com"),
+    ("Rohit", "rohit.panda@styldod.com"),
+    ("Manas", "manas.samal@styldod.com"),
+    ("Siddhanta", "siddhanta.gupta@styldod.com"),
+    ("Vishal", "vishal.yadav@styldod.com"),
+    ("Deepak", "deepak.pandey@styldod.com"),
+    ("Swetha", "shweta.shaw@styldod.com"),
+    ("Rohit", "rohit.thorat@styldod.com"),
+    ("Zeeshan", "zeeshan.noor@styldod.com"),
+    ("Yuvraj", "yuvraj.garg@styldod.com"),
+    ("Manju", "manjunath.bc@styldod.com"),
+    ("Arul", "arul.p@styldod.com"),
+    ("Abhishek Rath", "abhishek.rath@styldod.com"),
+    ("Henan", "hannan@styldod.com"),
+    ("Kiran", "kiran@styldod.com"),
+    ("Komal", "komal@styldod.com"),
+    ("Ruturaj", "ruturaj@styldod.com"),
 ]
 
 
 def seed_receivers():
     """Pre-load receiver emails if they don't already exist."""
     conn = get_connection()
-    for email in SEED_RECEIVERS:
-        name = email.split("@")[0].replace(".", " ").title()
+    for name, email in SEED_RECEIVERS:
         conn.execute(
             "INSERT OR IGNORE INTO receivers (name, email) VALUES (?, ?)",
             (name, email),
@@ -411,6 +450,34 @@ def delete_receiver(receiver_id):
     conn.execute("DELETE FROM receivers WHERE id = ?", (receiver_id,))
     conn.commit()
     conn.close()
+
+
+def toggle_receiver(receiver_id, active):
+    conn = get_connection()
+    conn.execute("UPDATE receivers SET active = ? WHERE id = ?", (int(active), receiver_id))
+    conn.commit()
+    conn.close()
+
+
+def activate_all_receivers():
+    conn = get_connection()
+    conn.execute("UPDATE receivers SET active = 1")
+    conn.commit()
+    conn.close()
+
+
+def deactivate_all_receivers():
+    conn = get_connection()
+    conn.execute("UPDATE receivers SET active = 0")
+    conn.commit()
+    conn.close()
+
+
+def get_active_receivers():
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM receivers WHERE active = 1 ORDER BY id").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 # ── Sender-Receiver Mapping ──────────────────────────────────
