@@ -354,14 +354,23 @@ elif page == "📥 Receivers":
 
 elif page == "🔗 Mapping":
     st.markdown("# 🔗 Sender → Receiver Mapping")
-    st.markdown("Assign up to 5 receivers to each sender. Click a sender card to manage its receivers.")
+    st.markdown("Assign receivers to each sender. Click a sender card to manage its receivers.")
 
-    # Refresh / Shuffle button
-    btn_col1, btn_col2 = st.columns([1, 5])
-    with btn_col1:
+    # Controls row: receivers-per-sender + shuffle button
+    ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 1, 3])
+    with ctrl_col1:
+        receivers_per_sender = st.number_input(
+            "Receivers per sender",
+            min_value=1, max_value=50,
+            value=5,
+            help="Number of receivers to assign to each sender when shuffling.",
+            key="receivers_per_sender",
+        )
+    with ctrl_col2:
+        st.markdown("<br>", unsafe_allow_html=True)
         if st.button("🔀 Shuffle All Mappings", use_container_width=True, type="primary"):
-            db.randomize_all_mappings()
-            st.success("✅ All mappings have been randomly shuffled!")
+            db.randomize_all_mappings(receivers_per_sender=int(receivers_per_sender))
+            st.success(f"✅ All mappings shuffled — {int(receivers_per_sender)} receiver(s) per sender!")
             st.rerun()
 
     st.markdown("---")
@@ -376,6 +385,7 @@ elif page == "🔗 Mapping":
     else:
         receiver_options = {r["id"]: f"{r['name']} ({r['email']})" for r in receivers}
         receiver_labels_list = list(receiver_options.values())
+        max_sel = int(receivers_per_sender)
 
         CARDS_PER_ROW = 4
         for i in range(0, len(senders), CARDS_PER_ROW):
@@ -415,11 +425,11 @@ elif page == "🔗 Mapping":
                             default_labels.append(receiver_options[rid])
 
                     selected_labels = st.multiselect(
-                        "Select receivers (max 5)",
+                        f"Select receivers (max {max_sel})",
                         options=receiver_labels_list,
                         default=default_labels,
                         key=f"map_{sender['id']}",
-                        max_selections=5,
+                        max_selections=max_sel,
                     )
 
                     label_to_id = {v: k for k, v in receiver_options.items()}
@@ -803,6 +813,33 @@ elif page == "🚀 Run Controls":
 elif page == "📋 Logs":
     st.markdown("# 📋 Email Logs")
     st.markdown("View, filter, and download all email sending activity.")
+
+    # Auto-refresh control
+    refresh_col1, refresh_col2 = st.columns([4, 1])
+    with refresh_col2:
+        auto_refresh = st.selectbox(
+            "Auto Refresh",
+            options=["Off", "1 min", "2 min", "3 min"],
+            index=0,
+            key="log_auto_refresh",
+        )
+
+    refresh_seconds = {"Off": None, "1 min": 60, "2 min": 120, "3 min": 180}
+    interval = refresh_seconds.get(auto_refresh)
+    if interval:
+        import streamlit.components.v1 as components
+        components.html(
+            f"""
+            <script>
+                setTimeout(function() {{
+                    window.parent.document.querySelectorAll('button[kind="secondary"]').forEach(function(btn) {{}});
+                    window.parent.location.reload();
+                }}, {interval * 1000});
+            </script>
+            """,
+            height=0,
+        )
+
     st.markdown("---")
 
     import pandas as pd
@@ -853,11 +890,12 @@ elif page == "📋 Logs":
         csv_df.to_csv(csv_buffer, index=False)
         csv_data = csv_buffer.getvalue()
 
-        # Date label for filename
+        # Date label for filename (DD-MonthName-YYYY)
+        from datetime import datetime as _dt
         if date_filter:
-            fname = f"warmup_logs_{date_filter}.csv"
+            fname = f"warmup_logs_{date_filter.strftime('%d-%B-%Y')}.csv"
         else:
-            fname = "warmup_logs_all.csv"
+            fname = f"warmup_logs_{_dt.now().strftime('%d-%B-%Y')}.csv"
 
         dl_cols = st.columns([3, 1])
         dl_cols[0].markdown(f"**Showing {total} log entries**")
