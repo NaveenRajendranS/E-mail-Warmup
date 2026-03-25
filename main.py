@@ -615,7 +615,7 @@ elif page == "🚀 Run Controls":
 
     settings = db.get_settings()
     senders = db.get_active_senders()
-    receivers = db.get_all_receivers()
+    receivers = db.get_active_receivers()
 
     # Preflight checks
     api_key = settings.get("gemini_api_key", "")
@@ -650,7 +650,7 @@ elif page == "🚀 Run Controls":
 
     status_cols = st.columns(5)
     status_cols[0].metric("Active Senders", len(senders))
-    status_cols[1].metric("Receivers", len(receivers))
+    status_cols[1].metric("Active Receivers", len(receivers))
     status_cols[2].metric("Rounds/Day", rounds_per_day)
     status_cols[3].metric("Gap", f"{gap_minutes} min")
     status_cols[4].metric("Daily Limit", settings.get("daily_limit", 20))
