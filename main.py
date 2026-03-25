@@ -219,7 +219,7 @@ elif page == "📤 Senders":
                         st.error(msg)
 
     # Sender Card Grid
-    senders = db.get_all_senders()
+    senders = all_senders
     if senders:
         CARDS_PER_ROW = 4
         for i in range(0, len(senders), CARDS_PER_ROW):
@@ -317,7 +317,7 @@ elif page == "📥 Receivers":
                         st.error(msg)
 
     # Receiver Card Grid
-    receivers = db.get_all_receivers()
+    receivers = all_receivers
     if receivers:
         CARDS_PER_ROW = 4
         for i in range(0, len(receivers), CARDS_PER_ROW):
@@ -404,6 +404,9 @@ elif page == "🔗 Mapping":
         receiver_labels_list = list(receiver_options.values())
         max_sel = int(receivers_per_sender)
 
+        # Fetch ALL mappings in one query
+        all_mappings = db.get_all_mapped_receiver_ids_bulk()
+
         CARDS_PER_ROW = 4
         for i in range(0, len(senders), CARDS_PER_ROW):
             cols = st.columns(CARDS_PER_ROW)
@@ -416,7 +419,7 @@ elif page == "🔗 Mapping":
                 letter = email[0].upper()
                 color = get_avatar_color(email)
                 name_part = email.split("@")[0].replace(".", " ").title()
-                mapped_count = len(db.get_mapped_receiver_ids(sender["id"]))
+                mapped_count = len(all_mappings.get(sender["id"], []))
 
                 badge_html = ""
                 if mapped_count > 0:
@@ -433,7 +436,7 @@ elif page == "🔗 Mapping":
             # Expander row for managing mappings (after each row of cards)
             for j in range(min(CARDS_PER_ROW, len(senders) - i)):
                 sender = senders[i + j]
-                current_mapped = db.get_mapped_receiver_ids(sender["id"])
+                current_mapped = all_mappings.get(sender["id"], [])
 
                 with st.expander(f"▶ Manage receivers for **{sender['email']}**", expanded=False):
                     default_labels = []
@@ -441,11 +444,15 @@ elif page == "🔗 Mapping":
                         if rid in receiver_options:
                             default_labels.append(receiver_options[rid])
 
+                    # Force-set default if widget hasn't been manually changed
+                    widget_key = f"map_{sender['id']}"
+                    if widget_key not in st.session_state:
+                        st.session_state[widget_key] = default_labels
+
                     selected_labels = st.multiselect(
                         f"Select receivers (max {max_sel})",
                         options=receiver_labels_list,
-                        default=default_labels,
-                        key=f"map_{sender['id']}",
+                        key=widget_key,
                         max_selections=max_sel,
                     )
 

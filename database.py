@@ -461,7 +461,23 @@ def delete_receiver(receiver_id):
 
 
 
-# â”€â”€ Sender-Receiver Mapping â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â”€â”€# ── Sender-Receiver Mapping ──────────────────────────────────
+
+def get_all_mapped_receiver_ids_bulk():
+    """Fetch ALL sender→receiver mappings in one query. Returns {sender_id: [receiver_ids]}."""
+    conn = get_connection()
+    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c.execute("SELECT sender_id, receiver_id FROM sender_receiver_map ORDER BY sender_id, receiver_id")
+    rows = c.fetchall()
+    result = {}
+    for r in rows:
+        sid = r["sender_id"]
+        if sid not in result:
+            result[sid] = []
+        result[sid].append(r["receiver_id"])
+    return result
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def get_mapped_receivers(sender_id):
     """Get receivers mapped to a specific sender."""
