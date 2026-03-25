@@ -1,63 +1,22 @@
 """
-PostgreSQL (Supabase) database layer for the Email Warmup System.
+SQLite database layer for the Email Warmup System.
 Handles CRUD for senders, receivers, settings, and logs.
 """
 
+import sqlite3
 import os
-import psycopg2
-import psycopg2.extras
 from datetime import datetime, date, timezone, timedelta
-from config import DEFAULT_SETTINGS
+from config import DB_PATH, DEFAULT_SETTINGS
 
 # IST timezone (UTC+5:30)
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
-def get_database_url():
-    """Get the database URL from Streamlit secrets or environment."""
-    # Try Streamlit secrets first
-    try:
-        import streamlit as st
-        url = st.secrets.get("DATABASE_URL", "")
-        if url:
-            return url
-    except Exception:
-        pass
-    # Fallback to environment variable
-    return os.environ.get("DATABASE_URL", "")
-
-
-def _create_connection():
-    """Create a new PostgreSQL connection."""
-    url = get_database_url()
-    if not url:
-        raise RuntimeError("DATABASE_URL not configured. Add it to Streamlit secrets or environment.")
-    conn = psycopg2.connect(url)
-    conn.autocommit = False
-    return conn
-
-
-# Cache a single connection per app session
-_cached_conn = None
-
-
 def get_connection():
-    """Get a reusable PostgreSQL connection (auto-reconnects if stale)."""
-    global _cached_conn
-    try:
-        if _cached_conn is None or _cached_conn.closed:
-            _cached_conn = _create_connection()
-        else:
-            # Test if connection is still alive
-            _cached_conn.cursor().execute("SELECT 1")
-            _cached_conn.rollback()  # discard the test query
-    except Exception:
-        try:
-            _cached_conn.close()
-        except Exception:
-            pass
-        _cached_conn = _create_connection()
-    return _cached_conn
+    """Get a SQLite connection with row factory."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 def init_db():
@@ -67,33 +26,33 @@ def init_db():
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS senders (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
             app_password TEXT NOT NULL,
             active INTEGER DEFAULT 1,
-            created_at TIMESTAMP DEFAULT NOW()
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS receivers (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT NOW()
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS logs (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             sender_email TEXT NOT NULL,
             receiver_email TEXT NOT NULL,
             receiver_name TEXT,
             subject TEXT,
             status TEXT NOT NULL,
             error TEXT,
-            timestamp TEXT DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI:SS')
+            timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
@@ -106,9 +65,11 @@ def init_db():
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS sender_receiver_map (
-            id SERIAL PRIMARY KEY,
-            sender_id INTEGER NOT NULL REFERENCES senders(id) ON DELETE CASCADE,
-            receiver_id INTEGER NOT NULL REFERENCES receivers(id) ON DELETE CASCADE,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id INTEGER NOT NULL,
+            receiver_id INTEGER NOT NULL,
+            FOREIGN KEY (sender_id) REFERENCES senders(id) ON DELETE CASCADE,
+            FOREIGN KEY (receiver_id) REFERENCES receivers(id) ON DELETE CASCADE,
             UNIQUE(sender_id, receiver_id)
         )
     """)
@@ -116,30 +77,28 @@ def init_db():
     # Insert default settings if not present
     for key, value in DEFAULT_SETTINGS.items():
         c.execute(
-            "INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING",
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
             (key, str(value)),
         )
 
     conn.commit()
+    conn.close()
 
-    # Always seed senders and receivers (ON CONFLICT DO NOTHING makes this safe)
+    # Always seed senders and receivers (INSERT OR IGNORE makes this safe)
     seed_senders()
     seed_receivers()
 
     # Auto-map only on first run
     conn2 = get_connection()
-    c2 = conn2.cursor()
-    c2.execute("SELECT value FROM settings WHERE key = 'seeded'")
-    seeded = c2.fetchone()
-
+    seeded = conn2.execute("SELECT value FROM settings WHERE key = 'seeded'").fetchone()
     if not seeded:
         auto_map_senders()
-        c2.execute("INSERT INTO settings (key, value) VALUES ('seeded', 'true') ON CONFLICT (key) DO NOTHING")
+        conn2.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('seeded', 'true')")
         conn2.commit()
+    conn2.close()
 
 
-
-# â”€â”€ Seed Senders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Seed Senders ─────────────────────────────────────────────
 
 # (email, app_password, active)
 SEED_SENDERS = [
@@ -193,17 +152,16 @@ SEED_SENDERS = [
 def seed_senders():
     """Pre-load sender emails if they don't already exist."""
     conn = get_connection()
-    c = conn.cursor()
     for email, app_password, active in SEED_SENDERS:
-        c.execute(
-            "INSERT INTO senders (email, app_password, active) VALUES (%s, %s, %s) ON CONFLICT (email) DO NOTHING",
+        conn.execute(
+            "INSERT OR IGNORE INTO senders (email, app_password, active) VALUES (?, ?, ?)",
             (email, app_password, active),
         )
     conn.commit()
+    conn.close()
 
 
-
-# â”€â”€ Seed Receivers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Seed Receivers ───────────────────────────────────────────
 
 SEED_RECEIVERS = [
     "prithvir.1011@gmail.com",
@@ -241,32 +199,28 @@ SEED_RECEIVERS = [
 
 
 def seed_receivers():
-    """Pre-load receiver emails if they don't already exist. Name defaults to email username."""
+    """Pre-load receiver emails if they don't already exist."""
     conn = get_connection()
-    c = conn.cursor()
     for email in SEED_RECEIVERS:
         name = email.split("@")[0].replace(".", " ").title()
-        c.execute(
-            "INSERT INTO receivers (name, email) VALUES (%s, %s) ON CONFLICT (email) DO NOTHING",
+        conn.execute(
+            "INSERT OR IGNORE INTO receivers (name, email) VALUES (?, ?)",
             (name, email),
         )
     conn.commit()
-
+    conn.close()
 
 
 def auto_map_senders():
-    """Auto-assign 5 unique receivers to each sender that has no mappings.
-    Uses round-robin so each receiver is distributed fairly across senders."""
+    """Auto-assign 5 unique receivers to each sender that has no mappings."""
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c = conn.cursor()
 
-    c.execute("SELECT id FROM senders ORDER BY id")
-    senders = c.fetchall()
-    c.execute("SELECT id FROM receivers ORDER BY id")
-    receivers = c.fetchall()
+    senders = c.execute("SELECT id FROM senders ORDER BY id").fetchall()
+    receivers = c.execute("SELECT id FROM receivers ORDER BY id").fetchall()
 
     if not senders or not receivers:
-
+        conn.close()
         return
 
     receiver_ids = [r["id"] for r in receivers]
@@ -278,16 +232,13 @@ def auto_map_senders():
 
     for sender in senders:
         sid = sender["id"]
-        # Skip if this sender already has mappings
-        c.execute(
-            "SELECT COUNT(*) as cnt FROM sender_receiver_map WHERE sender_id = %s", (sid,)
-        )
-        existing = c.fetchone()["cnt"]
+        existing = c.execute(
+            "SELECT COUNT(*) FROM sender_receiver_map WHERE sender_id = ?", (sid,)
+        ).fetchone()[0]
         if existing > 0:
             offset += receivers_per_sender
             continue
 
-        # Pick 5 receivers using round-robin offset
         assigned = []
         for i in range(receivers_per_sender):
             idx = (offset + i) % num_receivers
@@ -296,14 +247,14 @@ def auto_map_senders():
 
         for rid in assigned:
             c.execute(
-                "INSERT INTO sender_receiver_map (sender_id, receiver_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                "INSERT OR IGNORE INTO sender_receiver_map (sender_id, receiver_id) VALUES (?, ?)",
                 (sid, rid),
             )
         mapped_any = True
 
     if mapped_any:
         conn.commit()
-
+    conn.close()
 
 
 def randomize_all_mappings(receivers_per_sender=5):
@@ -311,164 +262,149 @@ def randomize_all_mappings(receivers_per_sender=5):
     import random
 
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    c = conn.cursor()
 
-    c.execute("SELECT id FROM senders ORDER BY id")
-    senders = c.fetchall()
-    c.execute("SELECT id FROM receivers ORDER BY id")
-    receivers = c.fetchall()
+    senders = c.execute("SELECT id FROM senders ORDER BY id").fetchall()
+    receivers = c.execute("SELECT id FROM receivers ORDER BY id").fetchall()
 
     if not senders or not receivers:
-
+        conn.close()
         return
 
     receiver_ids = [r["id"] for r in receivers]
-
-    # Clear all existing mappings
     c.execute("DELETE FROM sender_receiver_map")
 
     for sender in senders:
         sid = sender["id"]
-        # Shuffle a copy of receiver IDs and pick the first N
         shuffled = receiver_ids.copy()
         random.shuffle(shuffled)
         assigned = shuffled[:receivers_per_sender]
 
         for rid in assigned:
             c.execute(
-                "INSERT INTO sender_receiver_map (sender_id, receiver_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                "INSERT OR IGNORE INTO sender_receiver_map (sender_id, receiver_id) VALUES (?, ?)",
                 (sid, rid),
             )
 
     conn.commit()
+    conn.close()
 
 
-
-# â”€â”€ Sender CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Sender CRUD ──────────────────────────────────────────────
 
 def get_all_senders():
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    c.execute("SELECT * FROM senders ORDER BY id")
-    rows = c.fetchall()
-
+    rows = conn.execute("SELECT * FROM senders ORDER BY id").fetchall()
+    conn.close()
     return [dict(r) for r in rows]
 
 
 def get_active_senders():
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    c.execute("SELECT * FROM senders WHERE active = 1 ORDER BY id")
-    rows = c.fetchall()
-
+    rows = conn.execute("SELECT * FROM senders WHERE active = 1 ORDER BY id").fetchall()
+    conn.close()
     return [dict(r) for r in rows]
 
 
 def add_sender(email, app_password):
     conn = get_connection()
-    c = conn.cursor()
     try:
-        c.execute(
-            "INSERT INTO senders (email, app_password) VALUES (%s, %s)",
+        conn.execute(
+            "INSERT INTO senders (email, app_password) VALUES (?, ?)",
             (email, app_password),
         )
         conn.commit()
         return True, "Sender added successfully."
-    except psycopg2.IntegrityError:
-        conn.rollback()
+    except sqlite3.IntegrityError:
         return False, "Sender email already exists."
+    finally:
+        conn.close()
 
 
 def update_sender(sender_id, email, app_password, active):
     conn = get_connection()
-    c = conn.cursor()
     try:
-        c.execute(
-            "UPDATE senders SET email = %s, app_password = %s, active = %s WHERE id = %s",
+        conn.execute(
+            "UPDATE senders SET email = ?, app_password = ?, active = ? WHERE id = ?",
             (email, app_password, int(active), sender_id),
         )
         conn.commit()
         return True, "Sender updated."
-    except psycopg2.IntegrityError:
-        conn.rollback()
+    except sqlite3.IntegrityError:
         return False, "Another sender with that email already exists."
+    finally:
+        conn.close()
 
 
 def delete_sender(sender_id):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute("DELETE FROM sender_receiver_map WHERE sender_id = %s", (sender_id,))
-    c.execute("DELETE FROM senders WHERE id = %s", (sender_id,))
+    conn.execute("DELETE FROM sender_receiver_map WHERE sender_id = ?", (sender_id,))
+    conn.execute("DELETE FROM senders WHERE id = ?", (sender_id,))
     conn.commit()
-
+    conn.close()
 
 
 def toggle_sender(sender_id, active):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute("UPDATE senders SET active = %s WHERE id = %s", (int(active), sender_id))
+    conn.execute("UPDATE senders SET active = ? WHERE id = ?", (int(active), sender_id))
     conn.commit()
+    conn.close()
 
 
-
-# â”€â”€ Receiver CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Receiver CRUD ────────────────────────────────────────────
 
 def get_all_receivers():
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    c.execute("SELECT * FROM receivers ORDER BY id")
-    rows = c.fetchall()
-
+    rows = conn.execute("SELECT * FROM receivers ORDER BY id").fetchall()
+    conn.close()
     return [dict(r) for r in rows]
 
 
 def add_receiver(name, email):
     conn = get_connection()
-    c = conn.cursor()
     try:
-        c.execute(
-            "INSERT INTO receivers (name, email) VALUES (%s, %s)",
+        conn.execute(
+            "INSERT INTO receivers (name, email) VALUES (?, ?)",
             (name, email),
         )
         conn.commit()
         return True, "Receiver added successfully."
-    except psycopg2.IntegrityError:
-        conn.rollback()
+    except sqlite3.IntegrityError:
         return False, "Receiver email already exists."
+    finally:
+        conn.close()
 
 
 def update_receiver(receiver_id, name, email):
     conn = get_connection()
-    c = conn.cursor()
     try:
-        c.execute(
-            "UPDATE receivers SET name = %s, email = %s WHERE id = %s",
+        conn.execute(
+            "UPDATE receivers SET name = ?, email = ? WHERE id = ?",
             (name, email, receiver_id),
         )
         conn.commit()
         return True, "Receiver updated."
-    except psycopg2.IntegrityError:
-        conn.rollback()
+    except sqlite3.IntegrityError:
         return False, "Another receiver with that email already exists."
+    finally:
+        conn.close()
 
 
 def delete_receiver(receiver_id):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute("DELETE FROM sender_receiver_map WHERE receiver_id = %s", (receiver_id,))
-    c.execute("DELETE FROM receivers WHERE id = %s", (receiver_id,))
+    conn.execute("DELETE FROM sender_receiver_map WHERE receiver_id = ?", (receiver_id,))
+    conn.execute("DELETE FROM receivers WHERE id = ?", (receiver_id,))
     conn.commit()
+    conn.close()
 
 
-
-# â”€â”€# ── Sender-Receiver Mapping ──────────────────────────────────
+# ── Sender-Receiver Mapping ──────────────────────────────────
 
 def get_all_mapped_receiver_ids_bulk():
     """Fetch ALL sender→receiver mappings in one query. Returns {sender_id: [receiver_ids]}."""
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    c.execute("SELECT sender_id, receiver_id FROM sender_receiver_map ORDER BY sender_id, receiver_id")
-    rows = c.fetchall()
+    rows = conn.execute("SELECT sender_id, receiver_id FROM sender_receiver_map ORDER BY sender_id, receiver_id").fetchall()
+    conn.close()
     result = {}
     for r in rows:
         sid = r["sender_id"]
@@ -477,79 +413,68 @@ def get_all_mapped_receiver_ids_bulk():
         result[sid].append(r["receiver_id"])
     return result
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def get_mapped_receivers(sender_id):
     """Get receivers mapped to a specific sender."""
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    c.execute("""
+    rows = conn.execute("""
         SELECT r.* FROM receivers r
         JOIN sender_receiver_map m ON r.id = m.receiver_id
-        WHERE m.sender_id = %s
+        WHERE m.sender_id = ?
         ORDER BY r.id
-    """, (sender_id,))
-    rows = c.fetchall()
-
+    """, (sender_id,)).fetchall()
+    conn.close()
     return [dict(r) for r in rows]
 
 
 def get_mapped_receiver_ids(sender_id):
     """Get receiver IDs mapped to a specific sender."""
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    c.execute(
-        "SELECT receiver_id FROM sender_receiver_map WHERE sender_id = %s",
+    rows = conn.execute(
+        "SELECT receiver_id FROM sender_receiver_map WHERE sender_id = ?",
         (sender_id,),
-    )
-    rows = c.fetchall()
-
+    ).fetchall()
+    conn.close()
     return [r["receiver_id"] for r in rows]
 
 
 def set_sender_mappings(sender_id, receiver_ids):
     """Replace all mappings for a sender with the given receiver IDs."""
     conn = get_connection()
-    c = conn.cursor()
-    c.execute("DELETE FROM sender_receiver_map WHERE sender_id = %s", (sender_id,))
+    conn.execute("DELETE FROM sender_receiver_map WHERE sender_id = ?", (sender_id,))
     for rid in receiver_ids:
-        c.execute(
-            "INSERT INTO sender_receiver_map (sender_id, receiver_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+        conn.execute(
+            "INSERT OR IGNORE INTO sender_receiver_map (sender_id, receiver_id) VALUES (?, ?)",
             (sender_id, rid),
         )
     conn.commit()
-
+    conn.close()
 
 
 def get_all_mappings():
     """Get all sender-receiver mappings grouped by sender."""
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    c.execute("""
+    rows = conn.execute("""
         SELECT m.sender_id, s.email as sender_email, m.receiver_id, r.email as receiver_email, r.name as receiver_name
         FROM sender_receiver_map m
         JOIN senders s ON s.id = m.sender_id
         JOIN receivers r ON r.id = m.receiver_id
         ORDER BY m.sender_id, m.receiver_id
-    """)
-    rows = c.fetchall()
-
+    """).fetchall()
+    conn.close()
     return [dict(r) for r in rows]
 
 
-# â”€â”€ Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Settings ─────────────────────────────────────────────────
 
 def get_settings():
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    c.execute("SELECT * FROM settings")
-    rows = c.fetchall()
-
+    rows = conn.execute("SELECT * FROM settings").fetchall()
+    conn.close()
     settings = {}
     for r in rows:
         key = r["key"]
         val = r["value"]
-        # Convert types based on defaults
         default = DEFAULT_SETTINGS.get(key)
         if isinstance(default, bool):
             settings[key] = val.lower() in ("true", "1", "yes")
@@ -570,104 +495,93 @@ def get_settings():
 
 def save_settings(settings_dict):
     conn = get_connection()
-    c = conn.cursor()
     for key, value in settings_dict.items():
-        c.execute(
-            "INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
             (key, str(value)),
         )
     conn.commit()
+    conn.close()
 
 
-
-# â”€â”€ Logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Logs ─────────────────────────────────────────────────────
 
 def add_log(sender_email, receiver_email, receiver_name, subject, status, error=None):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute(
+    conn.execute(
         """INSERT INTO logs (sender_email, receiver_email, receiver_name, subject, status, error, timestamp)
-           VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (sender_email, receiver_email, receiver_name, subject, status, error,
          datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")),
     )
     conn.commit()
-
+    conn.close()
 
 
 def get_logs(sender_filter=None, date_filter=None, status_filter=None, limit=200):
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     query = "SELECT * FROM logs WHERE 1=1"
     params = []
 
     if sender_filter and sender_filter != "All":
-        query += " AND sender_email = %s"
+        query += " AND sender_email = ?"
         params.append(sender_filter)
 
     if date_filter:
-        query += " AND LEFT(timestamp, 10) = %s"
+        query += " AND DATE(timestamp) = ?"
         params.append(str(date_filter))
 
     if status_filter and status_filter != "All":
-        query += " AND status = %s"
+        query += " AND status = ?"
         params.append(status_filter)
 
-    query += " ORDER BY id DESC LIMIT %s"
+    query += " ORDER BY id DESC LIMIT ?"
     params.append(limit)
 
-    c.execute(query, params)
-    rows = c.fetchall()
-
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
     return [dict(r) for r in rows]
 
 
 def get_today_sent_count(sender_email=None):
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     today = date.today().strftime("%Y-%m-%d")
     if sender_email:
-        c.execute(
-            "SELECT COUNT(*) as cnt FROM logs WHERE LEFT(timestamp, 10) = %s AND sender_email = %s AND status = 'Sent'",
+        row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM logs WHERE DATE(timestamp) = ? AND sender_email = ? AND status = 'Sent'",
             (today, sender_email),
-        )
+        ).fetchone()
     else:
-        c.execute(
-            "SELECT COUNT(*) as cnt FROM logs WHERE LEFT(timestamp, 10) = %s AND status = 'Sent'",
+        row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM logs WHERE DATE(timestamp) = ? AND status = 'Sent'",
             (today,),
-        )
-    row = c.fetchone()
-
+        ).fetchone()
+    conn.close()
     return row["cnt"] if row else 0
 
 
 def get_today_failed_count():
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     today = date.today().strftime("%Y-%m-%d")
-    c.execute(
-        "SELECT COUNT(*) as cnt FROM logs WHERE LEFT(timestamp, 10) = %s AND status = 'Failed'",
+    row = conn.execute(
+        "SELECT COUNT(*) as cnt FROM logs WHERE DATE(timestamp) = ? AND status = 'Failed'",
         (today,),
-    )
-    row = c.fetchone()
-
+    ).fetchone()
+    conn.close()
     return row["cnt"] if row else 0
 
 
 def get_last_run_time():
     conn = get_connection()
-    c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    c.execute(
+    row = conn.execute(
         "SELECT timestamp FROM logs ORDER BY id DESC LIMIT 1"
-    )
-    row = c.fetchone()
-
+    ).fetchone()
+    conn.close()
     return row["timestamp"] if row else "Never"
 
 
 def clear_logs():
     conn = get_connection()
-    c = conn.cursor()
-    c.execute("DELETE FROM logs")
+    conn.execute("DELETE FROM logs")
     conn.commit()
-
+    conn.close()
