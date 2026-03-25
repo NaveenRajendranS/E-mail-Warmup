@@ -1,4 +1,4 @@
-﻿"""
+"""
 PostgreSQL (Supabase) database layer for the Email Warmup System.
 Handles CRUD for senders, receivers, settings, and logs.
 """
@@ -364,8 +364,6 @@ def add_sender(email, app_password):
     except psycopg2.IntegrityError:
         conn.rollback()
         return False, "Sender email already exists."
-    finally:
-
 
 
 def update_sender(sender_id, email, app_password, active):
@@ -381,8 +379,6 @@ def update_sender(sender_id, email, app_password, active):
     except psycopg2.IntegrityError:
         conn.rollback()
         return False, "Another sender with that email already exists."
-    finally:
-
 
 
 def delete_sender(sender_id):
@@ -426,8 +422,6 @@ def add_receiver(name, email):
     except psycopg2.IntegrityError:
         conn.rollback()
         return False, "Receiver email already exists."
-    finally:
-
 
 
 def update_receiver(receiver_id, name, email):
@@ -443,8 +437,6 @@ def update_receiver(receiver_id, name, email):
     except psycopg2.IntegrityError:
         conn.rollback()
         return False, "Another receiver with that email already exists."
-    finally:
-
 
 
 def delete_receiver(receiver_id):
