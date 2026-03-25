@@ -177,11 +177,12 @@ SEED_SENDERS = [
 
 
 def seed_senders():
-    """Pre-load sender emails if they don't already exist."""
+    """Pre-load sender emails — update name/password if sender already exists."""
     conn = get_connection()
     for name, email, app_password, active in SEED_SENDERS:
         conn.execute(
-            "INSERT OR IGNORE INTO senders (name, email, app_password, active) VALUES (?, ?, ?, ?)",
+            """INSERT INTO senders (name, email, app_password, active) VALUES (?, ?, ?, ?)
+               ON CONFLICT(email) DO UPDATE SET name=excluded.name, app_password=excluded.app_password""",
             (name, email, app_password, active),
         )
     conn.commit()
