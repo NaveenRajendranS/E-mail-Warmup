@@ -164,10 +164,8 @@ def seed_senders():
 # ── Seed Receivers ───────────────────────────────────────────
 
 SEED_RECEIVERS = [
-    "prithvir.1011@gmail.com",
     "prithvi.r3957@gmail.com",
     "prithvi.gowda21@gmail.com",
-    "prithvi.pr1011@gmail.com",
     "prithvi.gowda1999@gmail.com",
     "test.automation.styldod@gmail.com",
     "rohit.a.thorat@gmail.com",
@@ -185,7 +183,6 @@ SEED_RECEIVERS = [
     "rewritingtheera@gmail.com",
     "arulpradeepp05@icloud.com",
     "ramyakrishna3024@gmail.com",
-    "puttanaik1993@gmail.com",
     "abhishek.rath85@gmail.com",
     "henanmaliyakkal@gmail.com",
     "amalyaaamz@gmail.com",
