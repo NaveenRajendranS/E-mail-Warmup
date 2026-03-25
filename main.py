@@ -773,6 +773,7 @@ elif page == "🚀 Run Controls":
                     send_result = send_email(
                         sender["email"], sender["app_password"],
                         recv["email"], result["subject"], result["body"],
+                        sender_name=sender.get("name", ""),
                     )
 
                     db.add_log(
