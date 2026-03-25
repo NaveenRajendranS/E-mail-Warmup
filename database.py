@@ -27,12 +27,19 @@ def init_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS senders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT DEFAULT '',
             email TEXT UNIQUE NOT NULL,
             app_password TEXT NOT NULL,
             active INTEGER DEFAULT 1,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # Migration: add name column if missing (for existing DBs)
+    try:
+        c.execute("ALTER TABLE senders ADD COLUMN name TEXT DEFAULT ''")
+    except Exception:
+        pass  # Column already exists
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS receivers (
@@ -100,59 +107,59 @@ def init_db():
 
 # ── Seed Senders ─────────────────────────────────────────────
 
-# (email, app_password, active)
+# (name, email, app_password, active)
 SEED_SENDERS = [
-    ("sopia@reimaginehome.app", "CHANGE_ME", 0),
-    ("alex@reimaginehome.app", "CHANGE_ME", 0),
-    ("jason@reimaginehome.app", "CHANGE_ME", 0),
-    ("emily@reimaginehome.app", "CHANGE_ME", 0),
-    ("henan@reimaginehome.app", "CHANGE_ME", 0),
-    ("desiree@reimaginehome.app", "CHANGE_ME", 0),
-    ("tiffany@reimaginehome.app", "CHANGE_ME", 0),
-    ("chris@reimaginehome.app", "CHANGE_ME", 0),
-    ("melissa@reimaginehome.app", "CHANGE_ME", 0),
-    ("valentina@reimaginehome.tech", "CHANGE_ME", 0),
-    ("lucas@reimaginehome.tech", "CHANGE_ME", 0),
-    ("amelia@reimaginehome.tech", "CHANGE_ME", 0),
-    ("ryan@reimaginehome.tech", "CHANGE_ME", 0),
-    ("helen@reimaginehome.tech", "CHANGE_ME", 0),
-    ("barbara@reimaginehome.tech", "CHANGE_ME", 0),
-    ("jade@reimaginehome.tech", "CHANGE_ME", 0),
-    ("valencia@reimaginehome.tech", "CHANGE_ME", 0),
-    ("luke@reimaginehome.tech", "CHANGE_ME", 0),
-    ("olivia@reimaginehome.homes", "CHANGE_ME", 0),
-    ("lena@reimaginehome.homes", "CHANGE_ME", 0),
-    ("daniel@reimaginehome.homes", "CHANGE_ME", 0),
-    ("elena@reimaginehome.homes", "CHANGE_ME", 0),
-    ("ben@reimaginehome.homes", "CHANGE_ME", 0),
-    ("jennifer@reimaginehome.homes", "CHANGE_ME", 0),
-    ("shelly@reimaginehome.homes", "CHANGE_ME", 0),
-    ("kimberley@reimaginehome.homes", "CHANGE_ME", 0),
-    ("stephan@reimaginehome.homes", "CHANGE_ME", 0),
+    ("Sopia Carter", "sopia@reimaginehome.app", "CHANGE_ME", 0),
+    ("Alex Morgan", "alex@reimaginehome.app", "CHANGE_ME", 0),
+    ("Jason Perry", "jason@reimaginehome.app", "CHANGE_ME", 0),
+    ("Emily Brooks", "emily@reimaginehome.app", "CHANGE_ME", 0),
+    ("Henan Davis", "henan@reimaginehome.app", "CHANGE_ME", 0),
+    ("Desiree Hall", "desiree@reimaginehome.app", "CHANGE_ME", 0),
+    ("Tiffany Ross", "tiffany@reimaginehome.app", "CHANGE_ME", 0),
+    ("Chris Taylor", "chris@reimaginehome.app", "CHANGE_ME", 0),
+    ("Melissa Ward", "melissa@reimaginehome.app", "CHANGE_ME", 0),
+    ("Valentina Cruz", "valentina@reimaginehome.tech", "CHANGE_ME", 0),
+    ("Lucas Bennett", "lucas@reimaginehome.tech", "CHANGE_ME", 0),
+    ("Amelia Fisher", "amelia@reimaginehome.tech", "CHANGE_ME", 0),
+    ("Ryan Cooper", "ryan@reimaginehome.tech", "CHANGE_ME", 0),
+    ("Helen Grant", "helen@reimaginehome.tech", "CHANGE_ME", 0),
+    ("Barbara Stone", "barbara@reimaginehome.tech", "CHANGE_ME", 0),
+    ("Jade Mitchell", "jade@reimaginehome.tech", "CHANGE_ME", 0),
+    ("Valencia Reed", "valencia@reimaginehome.tech", "CHANGE_ME", 0),
+    ("Luke Palmer", "luke@reimaginehome.tech", "CHANGE_ME", 0),
+    ("Olivia Hayes", "olivia@reimaginehome.homes", "CHANGE_ME", 0),
+    ("Lena Foster", "lena@reimaginehome.homes", "CHANGE_ME", 0),
+    ("Daniel Scott", "daniel@reimaginehome.homes", "CHANGE_ME", 0),
+    ("Elena Rivera", "elena@reimaginehome.homes", "CHANGE_ME", 0),
+    ("Ben Walker", "ben@reimaginehome.homes", "CHANGE_ME", 0),
+    ("Jennifer Cole", "jennifer@reimaginehome.homes", "CHANGE_ME", 0),
+    ("Shelly Adams", "shelly@reimaginehome.homes", "CHANGE_ME", 0),
+    ("Kimberley Price", "kimberley@reimaginehome.homes", "CHANGE_ME", 0),
+    ("Stephan Blake", "stephan@reimaginehome.homes", "CHANGE_ME", 0),
     # reimaginehome.net senders
-    ("akhilesh.majumdar@reimaginehome.net", "lkdf crxq acgq unyr", 1),
-    ("m.akhilesh@reimaginehome.net", "dxnv nowf geyn uiny", 1),
-    ("gohilshital@reimaginehome.net", "uvss atnu stms hcxe", 1),
-    ("akhilesh@reimaginehome.net", "namn fmmv njoi coph", 1),
-    ("shitalgohil@reimaginehome.net", "wqja tnku zpgy lulc", 1),
-    ("majumdarakhilesh@reimaginehome.net", "imzk jgms qurb xfqx", 1),
-    ("akhileshmajumdar@reimaginehome.net", "haqe azpu xzhm njxl", 1),
-    ("gohil.shital@reimaginehome.net", "pwbt moii xnut pbbz", 1),
-    ("shital.g@reimaginehome.net", "cjhl eurk fxoz pfji", 1),
-    ("shital.gohil@reimaginehome.net", "heic dyqo ntky zisk", 1),
-    ("shitalg@reimaginehome.net", "vaog dlqw wvmo zanw", 1),
-    ("Shital@reimaginehome.net", "opxh uzpi nnlq vovi", 1),
-    ("akhilesh.m@reimaginehome.net", "pcql okak crsa zrre", 1),
+    ("Akhilesh Majumdar", "akhilesh.majumdar@reimaginehome.net", "lkdf crxq acgq unyr", 1),
+    ("M Akhilesh", "m.akhilesh@reimaginehome.net", "dxnv nowf geyn uiny", 1),
+    ("Gohil Shital", "gohilshital@reimaginehome.net", "uvss atnu stms hcxe", 1),
+    ("Akhilesh", "akhilesh@reimaginehome.net", "namn fmmv njoi coph", 1),
+    ("Shital Gohil", "shitalgohil@reimaginehome.net", "wqja tnku zpgy lulc", 1),
+    ("Majumdar Akhilesh", "majumdarakhilesh@reimaginehome.net", "imzk jgms qurb xfqx", 1),
+    ("Akhilesh Majumdar", "akhileshmajumdar@reimaginehome.net", "haqe azpu xzhm njxl", 1),
+    ("Gohil Shital", "gohil.shital@reimaginehome.net", "pwbt moii xnut pbbz", 1),
+    ("Shital G", "shital.g@reimaginehome.net", "cjhl eurk fxoz pfji", 1),
+    ("Shital Gohil", "shital.gohil@reimaginehome.net", "heic dyqo ntky zisk", 1),
+    ("Shital G", "shitalg@reimaginehome.net", "vaog dlqw wvmo zanw", 1),
+    ("Shital", "Shital@reimaginehome.net", "opxh uzpi nnlq vovi", 1),
+    ("Akhilesh M", "akhilesh.m@reimaginehome.net", "pcql okak crsa zrre", 1),
 ]
 
 
 def seed_senders():
     """Pre-load sender emails if they don't already exist."""
     conn = get_connection()
-    for email, app_password, active in SEED_SENDERS:
+    for name, email, app_password, active in SEED_SENDERS:
         conn.execute(
-            "INSERT OR IGNORE INTO senders (email, app_password, active) VALUES (?, ?, ?)",
-            (email, app_password, active),
+            "INSERT OR IGNORE INTO senders (name, email, app_password, active) VALUES (?, ?, ?, ?)",
+            (name, email, app_password, active),
         )
     conn.commit()
     conn.close()
