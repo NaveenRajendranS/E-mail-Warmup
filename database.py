@@ -185,6 +185,11 @@ def seed_senders():
                ON CONFLICT(email) DO UPDATE SET name=excluded.name, app_password=excluded.app_password""",
             (name, email, app_password, active),
         )
+        # Force-update name for any existing rows (belt and suspenders)
+        conn.execute(
+            "UPDATE senders SET name = ? WHERE email = ? AND (name IS NULL OR name = '')",
+            (name, email),
+        )
     conn.commit()
     conn.close()
 
