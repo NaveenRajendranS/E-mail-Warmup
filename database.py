@@ -194,6 +194,15 @@ def seed_senders():
     conn.close()
 
 
+# Build a fast email → name lookup from the seed list (guaranteed correct)
+SENDER_NAME_LOOKUP = {email.lower(): name for name, email, _, _ in SEED_SENDERS}
+
+
+def get_sender_display_name(email):
+    """Get the display name for a sender email, always from the hardcoded seed list."""
+    return SENDER_NAME_LOOKUP.get(email.lower(), email.split("@")[0].replace(".", " ").title())
+
+
 # ── Seed Receivers ───────────────────────────────────────────
 
 # (name, email)
