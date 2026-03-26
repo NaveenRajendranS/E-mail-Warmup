@@ -481,7 +481,38 @@ def get_active_receivers():
     return [dict(r) for r in rows]
 
 
-# ── Sender-Receiver Mapping ──────────────────────────────────
+def get_recent_receiver_emails(sender_email, days=3):
+    """Get receiver emails that this sender has emailed in the last N days."""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT DISTINCT receiver_email FROM logs
+           WHERE sender_email = ? AND status = 'Sent'
+           AND timestamp >= datetime('now', ?)""",
+        (sender_email, f"-{days} days"),
+    ).fetchall()
+    conn.close()
+    return {row["receiver_email"] for row in rows}
+
+
+def pick_receivers_for_sender(sender_email, all_active_receivers, count=5, cooldown_days=3):
+    """
+    Pick receivers for a sender, prioritizing those NOT recently emailed.
+    If not enough fresh receivers, allow reuse of recent ones.
+    """
+    import random
+    recent = get_recent_receiver_emails(sender_email, days=cooldown_days)
+
+    fresh = [r for r in all_active_receivers if r["email"] not in recent]
+    stale = [r for r in all_active_receivers if r["email"] in recent]
+
+    random.shuffle(fresh)
+    random.shuffle(stale)
+
+    picked = fresh[:count]
+    if len(picked) < count:
+        picked += stale[:count - len(picked)]
+
+    return picked
 
 def get_all_mapped_receiver_ids_bulk():
     """Fetch ALL sender→receiver mappings in one query. Returns {sender_id: [receiver_ids]}."""

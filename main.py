@@ -625,12 +625,8 @@ elif page == "🚀 Run Controls":
         except Exception:
             pass
 
-    # Check if any sender has mapped receivers
-    any_mapped = False
-    for s in senders:
-        if db.get_mapped_receivers(s["id"]):
-            any_mapped = True
-            break
+    # Check if there are active receivers
+    active_recv = db.get_active_receivers()
 
     ready = True
     if not api_key:
@@ -639,8 +635,8 @@ elif page == "🚀 Run Controls":
     if not senders:
         st.warning("⚠️ No active senders. Go to **Senders** to add and activate accounts.")
         ready = False
-    if not any_mapped:
-        st.warning("⚠️ No sender-receiver mappings configured. Go to **🔗 Mapping** to assign receivers.")
+    if not active_recv:
+        st.warning("⚠️ No active receivers. Go to **📥 Receivers** to activate some.")
         ready = False
 
     # Status display
@@ -721,10 +717,17 @@ elif page == "🚀 Run Controls":
             active_senders = db.get_active_senders()
 
             # Calculate total ops for this round
-            total_ops = 0
+            # Smart selection: each sender gets 5 receivers they haven't emailed recently
+            all_active_receivers = db.get_active_receivers()
+
+            sender_receiver_map = {}
             for s in active_senders:
-                mapped = db.get_mapped_receivers(s["id"])
-                total_ops += len(mapped)
+                picked = db.pick_receivers_for_sender(
+                    s["email"], all_active_receivers, count=5, cooldown_days=3
+                )
+                sender_receiver_map[s["id"]] = picked
+
+            total_ops = sum(len(v) for v in sender_receiver_map.values())
             total_ops = max(total_ops, 1)
             completed = 0
 
@@ -797,15 +800,15 @@ elif page == "🚀 Run Controls":
 
                 return results
 
-            # Build task list
+            # Build task list from shuffled distribution
             sender_tasks = []
             for sender in active_senders:
-                mapped = db.get_mapped_receivers(sender["id"])
-                if not mapped:
+                assigned_receivers = sender_receiver_map[sender["id"]]
+                if not assigned_receivers:
                     with log_area:
-                        st.info(f"⏭️ {sender['email']} — no receivers mapped. Skipping.")
+                        st.info(f"⏭️ {sender['email']} — no receivers assigned this round. Skipping.")
                     continue
-                sender_tasks.append((sender, mapped))
+                sender_tasks.append((sender, assigned_receivers))
 
             status_text.markdown(
                 f"**Round {current_round}** | Sending from **{len(sender_tasks)} senders** in parallel..."
