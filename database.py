@@ -207,6 +207,7 @@ def get_sender_display_name(email):
 
 # (name, email)
 SEED_RECEIVERS = [
+    # ── External receivers (43) ──
     ("Prithvi", "prithvi.r3957@gmail.com"),
     ("Prithvi", "prithvi.gowda21@gmail.com"),
     ("Prithvi", "prithvi.pr1011@gmail.com"),
@@ -251,6 +252,64 @@ SEED_RECEIVERS = [
     ("Kiran", "kiran@styldod.com"),
     ("Komal", "komal@styldod.com"),
     ("Ruturaj", "ruturaj@styldod.com"),
+    # ── Internal receivers (sender accounts as receivers) ──
+    # reimaginehome.shop
+    ("Bill Cain", "bill@reimaginehome.shop"),
+    ("Shital Gohil", "shitalgohil@reimaginehome.shop"),
+    ("Christina West", "christina@reimaginehome.shop"),
+    ("Christie Brooks", "christie@reimaginehome.shop"),
+    ("Ava Morgan", "ava@reimaginehome.shop"),
+    ("Noah Bennett", "noah@reimaginehome.shop"),
+    ("Akhilesh Majumdar", "akhileshmajumdar@reimaginehome.shop"),
+    ("Akhilesh Majumdar", "akhileshm@reimaginehome.shop"),
+    ("Shital Gohil", "shitalg@reimaginehome.shop"),
+    # reimaginehome.app
+    ("Tayne Jacobs", "tayne@reimaginehome.app"),
+    ("Sophia Mitchell", "sopia@reimaginehome.app"),
+    ("Alex Morgan", "alex@reimaginehome.app"),
+    ("Jason Kim", "jason@reimaginehome.app"),
+    ("Emily Harper", "emily@reimaginehome.app"),
+    ("Henan Marakkar", "henan@reimaginehome.app"),
+    ("Desiree Bennet", "desiree@reimaginehome.app"),
+    ("Tiffany Forsyth", "tiffany@reimaginehome.app"),
+    ("Chris Dodge", "chris@reimaginehome.app"),
+    ("Melissa Morgan", "melissa@reimaginehome.app"),
+    # reimaginehome.tech
+    ("Jeroen Lublin", "jeroen@reimaginehome.tech"),
+    ("Valentina Russo", "valentina@reimaginehome.tech"),
+    ("Lucas Meyer", "lucas@reimaginehome.tech"),
+    ("Amelia Brooks", "amelia@reimaginehome.tech"),
+    ("Ryan Cole", "ryan@reimaginehome.tech"),
+    ("Helen Evans", "helen@reimaginehome.tech"),
+    ("Barbara Fredricksen", "barbara@reimaginehome.tech"),
+    ("Jade Briggs", "jade@reimaginehome.tech"),
+    ("Valencia Pareira", "valencia@reimaginehome.tech"),
+    ("Luke Walker", "luke@reimaginehome.tech"),
+    # reimaginehome.homes
+    ("Diego Edmondson", "diego@reimaginehome.homes"),
+    ("Olivia Grant", "olivia@reimaginehome.homes"),
+    ("Lena Fischer", "lena@reimaginehome.homes"),
+    ("Daniel Wright", "daniel@reimaginehome.homes"),
+    ("Elena Martinez", "elena@reimaginehome.homes"),
+    ("Ben Hogan", "ben@reimaginehome.homes"),
+    ("Jennifer Wong", "jennifer@reimaginehome.homes"),
+    ("Shelly Potter", "shelly@reimaginehome.homes"),
+    ("Kimberley Patterson", "kimberley@reimaginehome.homes"),
+    ("Stephan Pitts", "stephan@reimaginehome.homes"),
+    # reimaginehome.net
+    ("Akhilesh Majumdar", "akhilesh.majumdar@reimaginehome.net"),
+    ("Akhilesh Majumdar", "m.akhilesh@reimaginehome.net"),
+    ("Shital Gohil", "gohilshital@reimaginehome.net"),
+    ("Akhilesh Majumdar", "akhilesh@reimaginehome.net"),
+    ("Shital Gohil", "shitalgohil@reimaginehome.net"),
+    ("Akhilesh Majumdar", "majumdarakhilesh@reimaginehome.net"),
+    ("Akhilesh Majumdar", "akhileshmajumdar@reimaginehome.net"),
+    ("Shital Gohil", "gohil.shital@reimaginehome.net"),
+    ("Shital Gohil", "shital.g@reimaginehome.net"),
+    ("Shital Gohil", "shital.gohil@reimaginehome.net"),
+    ("Shital Gohil", "shitalg@reimaginehome.net"),
+    ("Shital Gohil", "Shital@reimaginehome.net"),
+    ("Akhilesh Majumdar", "akhilesh.m@reimaginehome.net"),
 ]
 
 
@@ -510,22 +569,64 @@ def get_recent_receiver_emails(sender_email, days=3):
 
 def pick_receivers_for_sender(sender_email, all_active_receivers, count=5, cooldown_days=3):
     """
-    Pick receivers for a sender, prioritizing those NOT recently emailed.
-    If not enough fresh receivers, allow reuse of recent ones.
+    Pick receivers for a sender with STRICT domain-based routing:
+    - NEVER send to same domain as sender
+    - Mix 2-3 internal (cross-domain) + 2-3 external receivers
+    - Prefer receivers not recently emailed (cooldown)
+    - Fallback to reuse if not enough fresh receivers
     """
     import random
+
+    sender_domain = sender_email.split("@")[1].lower()
     recent = get_recent_receiver_emails(sender_email, days=cooldown_days)
 
-    fresh = [r for r in all_active_receivers if r["email"] not in recent]
-    stale = [r for r in all_active_receivers if r["email"] in recent]
+    # STRICT RULE: Filter out same-domain receivers AND self
+    valid = [
+        r for r in all_active_receivers
+        if r["email"].split("@")[1].lower() != sender_domain
+        and r["email"].lower() != sender_email.lower()
+    ]
 
-    random.shuffle(fresh)
-    random.shuffle(stale)
+    # Split into internal (reimaginehome.*) and external
+    internal = [r for r in valid if "reimaginehome." in r["email"].split("@")[1].lower()]
+    external = [r for r in valid if "reimaginehome." not in r["email"].split("@")[1].lower()]
 
-    picked = fresh[:count]
+    # Separate fresh vs stale for each pool
+    fresh_internal = [r for r in internal if r["email"] not in recent]
+    stale_internal = [r for r in internal if r["email"] in recent]
+    fresh_external = [r for r in external if r["email"] not in recent]
+    stale_external = [r for r in external if r["email"] in recent]
+
+    random.shuffle(fresh_internal)
+    random.shuffle(stale_internal)
+    random.shuffle(fresh_external)
+    random.shuffle(stale_external)
+
+    # Target: 2-3 internal + 2-3 external (total = count)
+    internal_count = min(3, count // 2 + 1)  # 3 internal
+    external_count = count - internal_count     # 2 external
+
+    # Pick internal (prefer fresh)
+    picked_internal = fresh_internal[:internal_count]
+    if len(picked_internal) < internal_count:
+        picked_internal += stale_internal[:internal_count - len(picked_internal)]
+
+    # Pick external (prefer fresh)
+    picked_external = fresh_external[:external_count]
+    if len(picked_external) < external_count:
+        picked_external += stale_external[:external_count - len(picked_external)]
+
+    picked = picked_internal + picked_external
+
+    # If total < count, fill from whichever pool has more
     if len(picked) < count:
-        picked += stale[:count - len(picked)]
+        remaining = count - len(picked)
+        already = {r["email"] for r in picked}
+        extras = [r for r in (fresh_internal + fresh_external + stale_internal + stale_external)
+                  if r["email"] not in already]
+        picked += extras[:remaining]
 
+    random.shuffle(picked)  # Final shuffle for randomness
     return picked
 
 def get_all_mapped_receiver_ids_bulk():

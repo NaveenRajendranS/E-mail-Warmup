@@ -34,7 +34,11 @@ def send_email(sender_email: str, app_password: str,
         msg["From"] = formataddr((sender_name, sender_email))
         msg["To"] = receiver_email
         msg["Subject"] = subject
-        msg.set_content(body)
+
+        # Append signature
+        full_body = body.rstrip() + "\n\nRegards,\n" + sender_name
+
+        msg.set_content(full_body)
 
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
             server.starttls()
