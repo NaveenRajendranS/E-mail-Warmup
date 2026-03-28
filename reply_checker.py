@@ -7,7 +7,9 @@ Uses the same App Passwords stored for each sender account.
 import imaplib
 import email
 from email.header import decode_header
-from config import IMAP_SERVER, IMAP_PORT
+
+IMAP_SERVER = "imap.gmail.com"
+IMAP_PORT = 993
 
 
 def _decode_header_value(raw):
