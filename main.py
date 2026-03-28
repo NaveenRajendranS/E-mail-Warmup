@@ -130,7 +130,7 @@ with st.sidebar:
     st.markdown("---")
     page = st.radio(
         "Navigation",
-        ["📊 Dashboard", "📤 Senders", "📥 Receivers", "🔗 Mapping", "⚙️ Settings", "🚀 Run Controls", "📋 Logs"],
+        ["📊 Dashboard", "📤 Senders", "📥 Receivers", "🔗 Mapping", "⚙️ Settings", "🚀 Run Controls", "📋 Logs", "📈 Analytics"],
         label_visibility="collapsed",
     )
     st.markdown("---")
@@ -786,6 +786,7 @@ elif page == "🚀 Run Controls":
                     )
 
                     if send_result["status"] == STATUS_SENT:
+                        db.increment_sent_count(sender["email"])
                         results.append(("success", f"🟢 R{current_round} | {sender['email']} → {recv['email']} | \"{result['subject']}\""))
                     else:
                         results.append(("error", f"🔴 R{current_round} | {sender['email']} → {recv['email']} | {send_result.get('error', 'Unknown')}"))
@@ -1008,3 +1009,136 @@ elif page == "📋 Logs":
             st.dataframe(date_summary, use_container_width=True, hide_index=True)
     else:
         st.info("No logs found matching your filters.")
+
+# ══════════════════════════════════════════════════════════════
+# 📈 ANALYTICS — Live Gmail Mailbox Stats via IMAP
+# ══════════════════════════════════════════════════════════════
+
+elif page == "📈 Analytics":
+    st.markdown("# 📈 Email Analytics")
+    st.markdown("Live mailbox stats pulled directly from Gmail via IMAP.")
+    st.markdown("---")
+
+    import pandas as pd
+    from reply_checker import get_mailbox_stats
+
+    all_senders = db.get_all_senders()
+
+    if not all_senders:
+        st.warning("No sender accounts configured. Go to **📤 Senders** to add accounts.")
+    else:
+        # ── Sender Selection ──────────────────────────────
+        st.markdown("### Select Senders to Check")
+
+        sel_col1, sel_col2, sel_col3 = st.columns([1, 1, 4])
+        with sel_col1:
+            if st.button("✅ Select All", key="analytics_select_all", use_container_width=True):
+                for s in all_senders:
+                    st.session_state[f"chk_{s['id']}"] = True
+                st.rerun()
+        with sel_col2:
+            if st.button("⛔ Clear All", key="analytics_clear_all", use_container_width=True):
+                for s in all_senders:
+                    st.session_state[f"chk_{s['id']}"] = False
+                st.rerun()
+
+        # Checkbox grid for sender selection
+        COLS = 4
+        selected_senders = []
+        for i in range(0, len(all_senders), COLS):
+            cols = st.columns(COLS)
+            for j, col in enumerate(cols):
+                idx = i + j
+                if idx >= len(all_senders):
+                    break
+                sender = all_senders[idx]
+                with col:
+                    checked = st.checkbox(
+                        sender["email"],
+                        value=st.session_state.get(f"chk_{sender['id']}", False),
+                        key=f"chk_{sender['id']}",
+                    )
+                    if checked:
+                        selected_senders.append(sender)
+
+        st.markdown("---")
+
+        # ── Fetch Stats Button ────────────────────────────
+        fetch_clicked = st.button(
+            "📊 Fetch Mailbox Stats",
+            use_container_width=True,
+            type="primary",
+            disabled=len(selected_senders) == 0,
+            help="Connect to Gmail via IMAP and read Sent/Inbox/Reply counts.",
+        )
+
+        if fetch_clicked and selected_senders:
+            progress = st.progress(0)
+            status_text = st.empty()
+            results = []
+
+            for i, sender in enumerate(selected_senders):
+                status_text.markdown(f"📡 Checking **{sender['email']}**...")
+                stats = get_mailbox_stats(sender["email"], sender["app_password"])
+                stats["sender_email"] = sender["email"]
+                results.append(stats)
+                progress.progress((i + 1) / len(selected_senders))
+
+            progress.empty()
+            status_text.empty()
+
+            # Store results in session state so they persist
+            st.session_state["analytics_results"] = results
+            st.rerun()
+
+        # ── Display Results ───────────────────────────────
+        results = st.session_state.get("analytics_results", [])
+
+        if results:
+            # Filter out errors
+            success = [r for r in results if not r.get("error")]
+            errors = [r for r in results if r.get("error")]
+
+            if success:
+                total_sent = sum(r["total_sent"] for r in success)
+                total_inbox = sum(r["total_inbox"] for r in success)
+                total_replied = sum(r["total_replied"] for r in success)
+
+                # Summary cards
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("📤 Total Sent", f"{total_sent:,}")
+                m2.metric("📥 Total Inbox", f"{total_inbox:,}")
+                m3.metric("💬 Total Replies", f"{total_replied:,}")
+                m4.metric("👥 Accounts Checked", len(success))
+
+                st.markdown("---")
+
+                # Per-sender table
+                st.markdown("### Per-Sender Breakdown")
+                df = pd.DataFrame(success)
+                df = df[["sender_email", "total_sent", "total_inbox", "total_replied"]]
+                df.columns = ["Sender Email", "Total Sent", "Total Inbox", "Total Replied"]
+                df = df.sort_values("Total Sent", ascending=False)
+
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+                # CSV Download
+                from io import BytesIO
+                csv_buffer = BytesIO()
+                df.to_csv(csv_buffer, index=False)
+                st.download_button(
+                    label="📥 Download CSV",
+                    data=csv_buffer.getvalue(),
+                    file_name=f"mailbox_stats_{datetime.now().strftime('%d-%B-%Y')}.csv",
+                    mime="text/csv",
+                )
+
+            # Show errors if any
+            if errors:
+                st.markdown("---")
+                st.markdown("### ⚠️ Failed Connections")
+                for err in errors:
+                    st.error(f"**{err['sender_email']}**: {err['error']}")
+        else:
+            st.info("Select senders above and click **📊 Fetch Mailbox Stats** to check their Gmail accounts.")
+

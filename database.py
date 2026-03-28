@@ -88,6 +88,17 @@ def init_db():
         )
     """)
 
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS sender_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_email TEXT UNIQUE NOT NULL,
+            total_sent INTEGER DEFAULT 0,
+            total_replied INTEGER DEFAULT 0,
+            last_reply_check TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Insert default settings if not present
     for key, value in DEFAULT_SETTINGS.items():
         c.execute(
@@ -814,3 +825,62 @@ def clear_logs():
     conn.execute("DELETE FROM logs")
     conn.commit()
     conn.close()
+
+
+# ── Persistent Sender Stats (Independent from Logs) ─────────
+
+def increment_sent_count(sender_email):
+    """Increment the total sent count for a sender. Called after each successful send."""
+    conn = get_connection()
+    now = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute(
+        """INSERT INTO sender_stats (sender_email, total_sent, total_replied, updated_at)
+           VALUES (?, 1, 0, ?)
+           ON CONFLICT(sender_email) DO UPDATE SET
+               total_sent = total_sent + 1,
+               updated_at = ?""",
+        (sender_email, now, now),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_replied_count(sender_email, replied_count):
+    """Set the total replied count for a sender after an IMAP check."""
+    conn = get_connection()
+    now = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute(
+        """INSERT INTO sender_stats (sender_email, total_sent, total_replied, last_reply_check, updated_at)
+           VALUES (?, 0, ?, ?, ?)
+           ON CONFLICT(sender_email) DO UPDATE SET
+               total_replied = ?,
+               last_reply_check = ?,
+               updated_at = ?""",
+        (sender_email, replied_count, now, now, replied_count, now, now),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_all_sender_stats():
+    """Get persistent stats for all senders. Returns list of dicts."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT ss.sender_email, ss.total_sent, ss.total_replied,
+               ss.last_reply_check, ss.updated_at
+        FROM sender_stats ss
+        ORDER BY ss.total_sent DESC
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_sent_subjects_for_sender(sender_email):
+    """Get all unique subjects sent by a sender (for reply matching)."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT DISTINCT subject FROM logs WHERE sender_email = ? AND status = 'Sent' AND subject != ''",
+        (sender_email,),
+    ).fetchall()
+    conn.close()
+    return [r["subject"] for r in rows]

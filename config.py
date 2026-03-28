@@ -6,6 +6,10 @@ Configuration constants and defaults for the Email Warmup System.
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 
+# IMAP Configuration (for reply checking)
+IMAP_SERVER = "imap.gmail.com"
+IMAP_PORT = 993
+
 # Default Settings
 DEFAULT_SETTINGS = {
     "gemini_api_key": "",
