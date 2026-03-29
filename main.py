@@ -794,8 +794,10 @@ elif page == "🚀 Run Controls":
                     with lock:
                         completed[0] += 1
 
-                    # Short rate-limit delay between emails (long delays kill threads on Streamlit Cloud)
-                    time.sleep(3)
+                    # Delay between receivers within a sender (configurable in Settings)
+                    delay_sec = get_delay_seconds(delay_min, random_delay_flag)
+                    if delay_sec > 0:
+                        time.sleep(delay_sec)
 
                 return results
 
