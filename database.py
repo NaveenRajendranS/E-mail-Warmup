@@ -637,6 +637,16 @@ def pick_receivers_for_sender(sender_email, all_active_receivers, count=5, coold
                   if r["email"] not in already]
         picked += extras[:remaining]
 
+    # LAST RESORT: if still < count, include ANY active receiver (except self)
+    if len(picked) < count:
+        remaining = count - len(picked)
+        already = {r["email"] for r in picked}
+        any_valid = [r for r in all_active_receivers
+                     if r["email"].lower() != sender_email.lower()
+                     and r["email"] not in already]
+        random.shuffle(any_valid)
+        picked += any_valid[:remaining]
+
     random.shuffle(picked)  # Final shuffle for randomness
     return picked
 
