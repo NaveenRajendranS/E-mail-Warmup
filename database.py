@@ -490,6 +490,42 @@ def deactivate_all_senders():
     conn.close()
 
 
+def get_sender_domains():
+    """Get unique domains from all senders, sorted alphabetically."""
+    conn = get_connection()
+    rows = conn.execute("SELECT DISTINCT email FROM senders ORDER BY email").fetchall()
+    conn.close()
+    domains = sorted(set(r["email"].split("@")[1].lower() for r in rows))
+    return domains
+
+
+def activate_senders_by_domain(domain):
+    """Activate all senders whose email belongs to the given domain."""
+    conn = get_connection()
+    conn.execute("UPDATE senders SET active = 1 WHERE email LIKE ?", (f"%@{domain}",))
+    conn.commit()
+    conn.close()
+
+
+def deactivate_senders_by_domain(domain):
+    """Deactivate all senders whose email belongs to the given domain."""
+    conn = get_connection()
+    conn.execute("UPDATE senders SET active = 0 WHERE email LIKE ?", (f"%@{domain}",))
+    conn.commit()
+    conn.close()
+
+
+def get_senders_by_domain(domain):
+    """Get all senders belonging to a domain."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM senders WHERE email LIKE ? ORDER BY id",
+        (f"%@{domain}",),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 # ── Receiver CRUD ────────────────────────────────────────────
 
 def get_all_receivers():
@@ -556,6 +592,42 @@ def deactivate_all_receivers():
     conn.execute("UPDATE receivers SET active = 0")
     conn.commit()
     conn.close()
+
+
+def get_receiver_domains():
+    """Get unique domains from all receivers, sorted alphabetically."""
+    conn = get_connection()
+    rows = conn.execute("SELECT DISTINCT email FROM receivers ORDER BY email").fetchall()
+    conn.close()
+    domains = sorted(set(r["email"].split("@")[1].lower() for r in rows))
+    return domains
+
+
+def activate_receivers_by_domain(domain):
+    """Activate all receivers whose email belongs to the given domain."""
+    conn = get_connection()
+    conn.execute("UPDATE receivers SET active = 1 WHERE email LIKE ?", (f"%@{domain}",))
+    conn.commit()
+    conn.close()
+
+
+def deactivate_receivers_by_domain(domain):
+    """Deactivate all receivers whose email belongs to the given domain."""
+    conn = get_connection()
+    conn.execute("UPDATE receivers SET active = 0 WHERE email LIKE ?", (f"%@{domain}",))
+    conn.commit()
+    conn.close()
+
+
+def get_receivers_by_domain(domain):
+    """Get all receivers belonging to a domain."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM receivers WHERE email LIKE ? ORDER BY id",
+        (f"%@{domain}",),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_active_receivers():

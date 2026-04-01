@@ -196,7 +196,7 @@ elif page == "📤 Senders":
     mc2.metric("Active", active_senders)
     mc3.metric("Inactive", inactive_senders)
 
-    # Bulk actions
+    # Global bulk actions
     btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 4])
     with btn_col1:
         if st.button("✅ Activate All", use_container_width=True, type="primary"):
@@ -210,6 +210,65 @@ elif page == "📤 Senders":
             st.rerun()
 
     st.markdown("---")
+
+    # ── Domain-wise Toggle Panel ──────────────────────────────
+    sender_domains = db.get_sender_domains()
+
+    if sender_domains:
+        st.markdown("### 🌐 Domain Controls")
+        st.markdown("Quickly activate or deactivate all senders for a specific domain.")
+
+        # Build domain stats
+        domain_stats = {}
+        for s in all_senders:
+            d = s["email"].split("@")[1].lower()
+            if d not in domain_stats:
+                domain_stats[d] = {"total": 0, "active": 0}
+            domain_stats[d]["total"] += 1
+            if s["active"]:
+                domain_stats[d]["active"] += 1
+
+        # Domain toggle grid (3 per row)
+        DOMAIN_COLS = 3
+        for i in range(0, len(sender_domains), DOMAIN_COLS):
+            cols = st.columns(DOMAIN_COLS)
+            for j, col in enumerate(cols):
+                idx = i + j
+                if idx >= len(sender_domains):
+                    break
+                domain = sender_domains[idx]
+                stats = domain_stats.get(domain, {"total": 0, "active": 0})
+                all_active = stats["active"] == stats["total"]
+                none_active = stats["active"] == 0
+
+                with col:
+                    # Domain info card
+                    bg_color = "#10b981" if all_active else ("#f59e0b" if stats["active"] > 0 else "#6b7280")
+                    st.markdown(f"""<div style="background:linear-gradient(145deg,#1a1a2e 0%,#16213e 100%);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;margin-bottom:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);">
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <div>
+                                <div style="color:#fff;font-weight:600;font-size:0.95rem;">🌐 {domain}</div>
+                                <div style="color:#8b8ba7;font-size:0.78rem;margin-top:2px;">{stats['active']}/{stats['total']} active</div>
+                            </div>
+                            <div style="width:12px;height:12px;border-radius:50%;background:{bg_color};box-shadow:0 0 8px {bg_color}88;"></div>
+                        </div>
+                    </div>""", unsafe_allow_html=True)
+
+                    dc1, dc2 = st.columns(2)
+                    with dc1:
+                        if st.button("✅ Activate", key=f"act_domain_s_{domain}", use_container_width=True,
+                                     type="primary", disabled=all_active):
+                            db.activate_senders_by_domain(domain)
+                            st.success(f"All {domain} senders activated!")
+                            st.rerun()
+                    with dc2:
+                        if st.button("⛔ Deactivate", key=f"deact_domain_s_{domain}", use_container_width=True,
+                                     disabled=none_active):
+                            db.deactivate_senders_by_domain(domain)
+                            st.success(f"All {domain} senders deactivated!")
+                            st.rerun()
+
+        st.markdown("---")
 
     # Add Sender
     with st.expander("➕ Add New Sender", expanded=False):
@@ -231,17 +290,22 @@ elif page == "📤 Senders":
                     else:
                         st.error(msg)
 
-    # Sender Card Grid
-    senders = all_senders
-    if senders:
+    # ── Sender Cards grouped by Domain ────────────────────────
+    for domain in sender_domains:
+        domain_senders = [s for s in all_senders if s["email"].split("@")[1].lower() == domain]
+        domain_active = sum(1 for s in domain_senders if s["active"])
+
+        status_dot = "🟢" if domain_active == len(domain_senders) else ("🟡" if domain_active > 0 else "🔴")
+        st.markdown(f"### {status_dot} {domain}  `({domain_active}/{len(domain_senders)} active)`")
+
         CARDS_PER_ROW = 4
-        for i in range(0, len(senders), CARDS_PER_ROW):
+        for i in range(0, len(domain_senders), CARDS_PER_ROW):
             cols = st.columns(CARDS_PER_ROW)
             for j, col in enumerate(cols):
                 idx = i + j
-                if idx >= len(senders):
+                if idx >= len(domain_senders):
                     break
-                sender = senders[idx]
+                sender = domain_senders[idx]
                 email = sender["email"]
                 letter = email[0].upper()
                 color = get_avatar_color(email)
@@ -290,7 +354,10 @@ elif page == "📤 Senders":
                             if sc2.form_submit_button("Cancel"):
                                 st.session_state[f"editing_sender_{sender['id']}"] = False
                                 st.rerun()
-    else:
+
+        st.markdown("---")
+
+    if not all_senders:
         st.info("No senders added yet. Click **Add New Sender** above.")
 
 
@@ -312,7 +379,7 @@ elif page == "📥 Receivers":
     mc2.metric("Active", active_receivers)
     mc3.metric("Inactive", inactive_receivers)
 
-    # Bulk actions
+    # Global bulk actions
     btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 4])
     with btn_col1:
         if st.button("✅ Activate All", use_container_width=True, type="primary", key="activate_all_recv"):
@@ -326,6 +393,65 @@ elif page == "📥 Receivers":
             st.rerun()
 
     st.markdown("---")
+
+    # ── Domain-wise Toggle Panel ──────────────────────────────
+    receiver_domains = db.get_receiver_domains()
+
+    if receiver_domains:
+        st.markdown("### 🌐 Domain Controls")
+        st.markdown("Quickly activate or deactivate all receivers for a specific domain.")
+
+        # Build domain stats
+        domain_stats = {}
+        for r in all_receivers:
+            d = r["email"].split("@")[1].lower()
+            if d not in domain_stats:
+                domain_stats[d] = {"total": 0, "active": 0}
+            domain_stats[d]["total"] += 1
+            if r.get("active", 1):
+                domain_stats[d]["active"] += 1
+
+        # Domain toggle grid (3 per row)
+        DOMAIN_COLS = 3
+        for i in range(0, len(receiver_domains), DOMAIN_COLS):
+            cols = st.columns(DOMAIN_COLS)
+            for j, col in enumerate(cols):
+                idx = i + j
+                if idx >= len(receiver_domains):
+                    break
+                domain = receiver_domains[idx]
+                stats = domain_stats.get(domain, {"total": 0, "active": 0})
+                all_active = stats["active"] == stats["total"]
+                none_active = stats["active"] == 0
+
+                with col:
+                    # Domain info card
+                    bg_color = "#10b981" if all_active else ("#f59e0b" if stats["active"] > 0 else "#6b7280")
+                    st.markdown(f"""<div style="background:linear-gradient(145deg,#1a1a2e 0%,#16213e 100%);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;margin-bottom:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);">
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <div>
+                                <div style="color:#fff;font-weight:600;font-size:0.95rem;">🌐 {domain}</div>
+                                <div style="color:#8b8ba7;font-size:0.78rem;margin-top:2px;">{stats['active']}/{stats['total']} active</div>
+                            </div>
+                            <div style="width:12px;height:12px;border-radius:50%;background:{bg_color};box-shadow:0 0 8px {bg_color}88;"></div>
+                        </div>
+                    </div>""", unsafe_allow_html=True)
+
+                    dc1, dc2 = st.columns(2)
+                    with dc1:
+                        if st.button("✅ Activate", key=f"act_domain_r_{domain}", use_container_width=True,
+                                     type="primary", disabled=all_active):
+                            db.activate_receivers_by_domain(domain)
+                            st.success(f"All {domain} receivers activated!")
+                            st.rerun()
+                    with dc2:
+                        if st.button("⛔ Deactivate", key=f"deact_domain_r_{domain}", use_container_width=True,
+                                     disabled=none_active):
+                            db.deactivate_receivers_by_domain(domain)
+                            st.success(f"All {domain} receivers deactivated!")
+                            st.rerun()
+
+        st.markdown("---")
 
     # Add Receiver
     with st.expander("➕ Add New Receiver", expanded=False):
@@ -347,17 +473,22 @@ elif page == "📥 Receivers":
                     else:
                         st.error(msg)
 
-    # Receiver Card Grid
-    receivers = all_receivers
-    if receivers:
+    # ── Receiver Cards grouped by Domain ──────────────────────
+    for domain in receiver_domains:
+        domain_receivers = [r for r in all_receivers if r["email"].split("@")[1].lower() == domain]
+        domain_active = sum(1 for r in domain_receivers if r.get("active", 1))
+
+        status_dot = "🟢" if domain_active == len(domain_receivers) else ("🟡" if domain_active > 0 else "🔴")
+        st.markdown(f"### {status_dot} {domain}  `({domain_active}/{len(domain_receivers)} active)`")
+
         CARDS_PER_ROW = 4
-        for i in range(0, len(receivers), CARDS_PER_ROW):
+        for i in range(0, len(domain_receivers), CARDS_PER_ROW):
             cols = st.columns(CARDS_PER_ROW)
             for j, col in enumerate(cols):
                 idx = i + j
-                if idx >= len(receivers):
+                if idx >= len(domain_receivers):
                     break
-                recv = receivers[idx]
+                recv = domain_receivers[idx]
                 letter = recv["name"][0].upper() if recv["name"] else "?"
                 color = get_avatar_color(recv["email"])
 
@@ -401,7 +532,10 @@ elif page == "📥 Receivers":
                             if sc2.form_submit_button("Cancel"):
                                 st.session_state[f"editing_receiver_{recv['id']}"] = False
                                 st.rerun()
-    else:
+
+        st.markdown("---")
+
+    if not all_receivers:
         st.info("No receivers added yet. Click **Add New Receiver** above.")
 
 
@@ -991,7 +1125,7 @@ elif page == "📋 Logs":
                 return "background-color: #c0392b; color: white; border-radius: 4px; padding: 2px 8px;"
             return ""
 
-        styled = display_df.style.applymap(highlight_status, subset=["Status"] if "Status" in display_df.columns else [])
+        styled = display_df.style.map(highlight_status, subset=["Status"] if "Status" in display_df.columns else [])
         st.dataframe(styled, use_container_width=True, hide_index=True)
 
         # Group by date summary
