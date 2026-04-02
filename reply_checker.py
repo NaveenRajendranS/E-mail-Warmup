@@ -26,9 +26,14 @@ def _decode_header_value(raw):
     return "".join(decoded)
 
 
-def get_mailbox_stats(email_addr: str, app_password: str) -> dict:
+def get_mailbox_stats(email_addr: str, app_password: str, date_filter=None) -> dict:
     """
     Connect to Gmail via IMAP and get mailbox statistics.
+
+    Args:
+        email_addr: Gmail address
+        app_password: App password
+        date_filter: Optional datetime.date object to filter stats for a specific day
 
     Returns:
         dict with:
@@ -48,23 +53,31 @@ def get_mailbox_stats(email_addr: str, app_password: str) -> dict:
         mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
         mail.login(email_addr, app_password)
 
+        if date_filter:
+            date_str = date_filter.strftime("%d-%b-%Y")
+            search_query_all = f'(ON "{date_str}")'
+            search_query_re = f'(SUBJECT "Re:" ON "{date_str}")'
+        else:
+            search_query_all = "ALL"
+            search_query_re = '(SUBJECT "Re:")'
+
         # ── Count Sent emails ──────────────────────────────
         # Gmail's Sent folder is "[Gmail]/Sent Mail"
         sent_status, _ = mail.select('"[Gmail]/Sent Mail"', readonly=True)
         if sent_status == "OK":
-            status, data = mail.search(None, "ALL")
+            status, data = mail.search(None, search_query_all)
             if status == "OK" and data[0]:
                 result["total_sent"] = len(data[0].split())
 
         # ── Count Inbox emails ─────────────────────────────
         inbox_status, _ = mail.select("INBOX", readonly=True)
         if inbox_status == "OK":
-            status, data = mail.search(None, "ALL")
+            status, data = mail.search(None, search_query_all)
             if status == "OK" and data[0]:
                 result["total_inbox"] = len(data[0].split())
 
             # Count replies (subjects starting with "Re:")
-            status, data = mail.search(None, '(SUBJECT "Re:")')
+            status, data = mail.search(None, search_query_re)
             if status == "OK" and data[0]:
                 result["total_replied"] = len(data[0].split())
 

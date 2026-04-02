@@ -1161,6 +1161,15 @@ elif page == "📈 Analytics":
     if not all_senders:
         st.warning("No sender accounts configured. Go to **📤 Senders** to add accounts.")
     else:
+        # ── Date Filter ───────────────────────────────────
+        st.markdown("### Filter Options")
+        analytics_date_filter = st.date_input(
+            "Filter stats by Date", 
+            value=None, 
+            help="If set to a specific date (e.g., today), only emails sent, received, and replied on this date will be counted."
+        )
+        st.markdown("---")
+
         # ── Sender Selection ──────────────────────────────
         st.markdown("### Select Senders to Check")
 
@@ -1213,7 +1222,7 @@ elif page == "📈 Analytics":
 
             for i, sender in enumerate(selected_senders):
                 status_text.markdown(f"📡 Checking **{sender['email']}**...")
-                stats = get_mailbox_stats(sender["email"], sender["app_password"])
+                stats = get_mailbox_stats(sender["email"], sender["app_password"], date_filter=analytics_date_filter)
                 stats["sender_email"] = sender["email"]
                 results.append(stats)
                 progress.progress((i + 1) / len(selected_senders))
