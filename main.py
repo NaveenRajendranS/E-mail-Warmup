@@ -10,7 +10,7 @@ from datetime import datetime, date
 
 import database as db
 from config import TONE_OPTIONS, STATUS_SENT, STATUS_FAILED, DEFAULT_SETTINGS
-from ai_generator import generate_email
+from ai_generator import generate_email, generate_reply
 from send_email import send_email
 from utils import mask_password, validate_email, get_delay_seconds, status_color, get_avatar_color
 
@@ -849,6 +849,7 @@ elif page == "🚀 Run Controls":
 
             # Re-fetch active senders each round (in case user changed them)
             active_senders = db.get_active_senders()
+            active_senders_dict = {s["email"].lower(): s for s in active_senders}
 
             # Calculate total ops for this round
             # Smart selection: each sender gets 5 receivers they haven't emailed recently
@@ -922,6 +923,40 @@ elif page == "🚀 Run Controls":
                     if send_result["status"] == STATUS_SENT:
                         db.increment_sent_count(sender["email"])
                         results.append(("success", f"🟢 R{current_round} | {sender['email']} → {recv['email']} | \"{result['subject']}\""))
+
+                        # Background reply feature
+                        recv_email_lower = recv["email"].lower()
+                        if recv_email_lower in active_senders_dict:
+                            recv_cred = active_senders_dict[recv_email_lower]
+                            reply_to_msg_id = send_result.get("message_id")
+                            
+                            def background_reply(sender_email, sender_name, receiver_cred, original_subject, msg_id):
+                                import random
+                                time.sleep(random.randint(60, 180))
+                                reply_content = generate_reply(sender_name.split()[0], tone, api_key)
+                                if "error" in reply_content: return
+                                
+                                reply_subject = original_subject if str(original_subject).lower().startswith("re:") else f"Re: {original_subject}"
+                                reply_result = send_email(
+                                    receiver_cred["email"], receiver_cred["app_password"],
+                                    sender_email, reply_subject, reply_content["body"],
+                                    sender_name=db.get_sender_display_name(receiver_cred["email"]),
+                                    reply_to_msg_id=msg_id
+                                )
+                                
+                                if reply_result["status"] == STATUS_SENT:
+                                    db.increment_sent_count(receiver_cred["email"])
+                                    db.add_log(receiver_cred["email"], sender_email, sender_name,
+                                               reply_subject, STATUS_SENT, None)
+                                else:
+                                    db.add_log(receiver_cred["email"], sender_email, sender_name,
+                                               reply_subject, STATUS_FAILED, reply_result.get("error"))
+                                               
+                            threading.Thread(
+                                target=background_reply,
+                                args=(sender["email"], db.get_sender_display_name(sender["email"]), recv_cred, result["subject"], reply_to_msg_id)
+                            ).start()
+
                     else:
                         results.append(("error", f"🔴 R{current_round} | {sender['email']} → {recv['email']} | {send_result.get('error', 'Unknown')}"))
 

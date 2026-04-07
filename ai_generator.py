@@ -93,9 +93,9 @@ Rules:
 - Do NOT use marketing or promotional language
 - Make it sound like a real quick message between coworkers
 - Do NOT use any emojis
-- Use the above as examples only
+- Use the above as examples only and generate a new email
 
-Return in the above format (nothing else):
+Return ONLY in this exact format (nothing else):
 SUBJECT: <subject line>
 BODY: <email body>"""
 
@@ -138,3 +138,79 @@ BODY: <email body>"""
 
     except Exception as e:
         return {"error": str(e)}
+
+
+def generate_reply(receiver_name: str, tone: str, api_key: str) -> dict:
+    """
+    Generate a short, casual reply to an email using Gemini API.
+
+    Args:
+        receiver_name: First name of the original sender (who we are replying to).
+        tone: Email tone — Casual, Friendly, or Internal office.
+        api_key: Gemini API key.
+
+    Returns:
+        dict with 'body' key, or 'error' key on failure.
+    """
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-2.5-flash")
+
+        import random
+        topics = [
+            "saying got it thanks",
+            "saying looks good to me",
+            "acknowledging the update",
+            "confirming you will check it out",
+            "saying thanks for the heads up",
+            "saying perfect, thanks",
+            "saying noted, will review soon",
+            "saying all good from my end",
+            "confirming receipt of the message",
+            "saying thanks, let's catch up later",
+        ]
+        chosen_topic = random.choice(topics)
+
+        prompt = f"""Write ONE short casual {tone.lower()} internal office email reply to {receiver_name}.
+
+Topic: {chosen_topic}
+
+Rules:
+- Write ONLY ONE email reply body, not multiple.
+- Body: exactly 1-2 short lines.
+- Sound completely natural and human acknowledging their last email.
+- Use {receiver_name}'s name naturally (like "Thanks {receiver_name}" or "Got it {receiver_name}").
+- Do NOT use any placeholders like [Name], [Your Name], [Topic].
+- Do NOT include a sign-off or signature.
+- Do NOT use marketing or promotional language.
+- Do NOT use any emojis.
+- Do NOT include a Subject line. Just the body.
+
+Return ONLY the reply text."""
+
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+
+        # Remove any Markdown bold/italic wrappers
+        import re
+        text = re.sub(r'[*_`]', '', text).strip()
+        
+        # If it generated a "Subject:", strip it
+        body_lines = []
+        for line in text.split("\n"):
+            if re.match(r'^subject\s*:', line, re.IGNORECASE):
+                continue
+            if re.match(r'^body\s*:', line, re.IGNORECASE):
+                line = re.sub(r'^body\s*:\s*', '', line, flags=re.IGNORECASE).strip()
+            body_lines.append(line)
+            
+        body = "\n".join(body_lines).strip()
+
+        if not body:
+            body = f"Got it, thanks {receiver_name}!"
+
+        return {"body": body}
+
+    except Exception as e:
+        return {"error": str(e)}
+
