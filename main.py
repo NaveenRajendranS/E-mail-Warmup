@@ -821,7 +821,8 @@ elif page == "🚀 Run Controls":
 
     if stop_clicked:
         st.session_state.warmup_running = False
-        st.info("Warmup stopped.")
+        db.save_settings({"warmup_stop_signal": "1"})
+        st.info("Warmup stopped. Background processes aborting...")
         st.rerun()
 
     # ── Auto-Scheduler Execution ─────────────────────────────
@@ -829,6 +830,7 @@ elif page == "🚀 Run Controls":
     if start_clicked and ready:
         st.session_state.warmup_running = True
         st.session_state.warmup_log = []
+        db.save_settings({"warmup_stop_signal": "0"})
 
         delay_min = settings.get("delay_minutes", 2)
         random_delay_flag = settings.get("random_delay", True)
@@ -891,6 +893,11 @@ elif page == "🚀 Run Controls":
                     if stop_event.is_set():
                         break
 
+                    # Check global stop signal
+                    if db.get_settings().get("warmup_stop_signal") == "1":
+                        results.append(("warning", f"⏹️ Stop signal received. Aborting {sender['email']}."))
+                        break
+
                     # Re-check daily limit
                     today_count = db.get_today_sent_count(sender["email"])
                     if today_count >= daily_limit:
@@ -932,7 +939,12 @@ elif page == "🚀 Run Controls":
                             
                             def background_reply(sender_email, sender_name, receiver_cred, original_subject, msg_id):
                                 import random
-                                time.sleep(random.randint(60, 180))
+                                sleep_for = random.randint(60, 180)
+                                for _ in range(sleep_for):
+                                    if db.get_settings().get("warmup_stop_signal") == "1":
+                                        return
+                                    time.sleep(1)
+
                                 reply_content = generate_reply(sender_name.split()[0], tone, api_key)
                                 if "error" in reply_content: return
                                 
@@ -1025,7 +1037,7 @@ elif page == "🚀 Run Controls":
 
                 # Countdown timer
                 for remaining in range(gap_seconds, 0, -1):
-                    if not st.session_state.warmup_running:
+                    if not st.session_state.warmup_running or db.get_settings().get("warmup_stop_signal") == "1":
                         break
                     mins, secs = divmod(remaining, 60)
                     countdown_area.markdown(
