@@ -661,6 +661,9 @@ def pick_receivers_for_sender(sender_email, all_active_receivers, count=5, coold
 
     sender_domain = sender_email.split("@")[1].lower()
     recent = get_recent_receiver_emails(sender_email, days=cooldown_days)
+    
+    # Needs active senders to figure out who is internal
+    active_senders_emails = set(s["email"].lower() for s in get_active_senders())
 
     # STRICT RULE: Filter out same-domain receivers AND self
     valid = [
@@ -669,9 +672,9 @@ def pick_receivers_for_sender(sender_email, all_active_receivers, count=5, coold
         and r["email"].lower() != sender_email.lower()
     ]
 
-    # Split into internal (reimaginehome.*) and external
-    internal = [r for r in valid if "reimaginehome." in r["email"].split("@")[1].lower()]
-    external = [r for r in valid if "reimaginehome." not in r["email"].split("@")[1].lower()]
+    # Split into internal (they are active senders) and external
+    internal = [r for r in valid if r["email"].lower() in active_senders_emails]
+    external = [r for r in valid if r["email"].lower() not in active_senders_emails]
 
     # Separate fresh vs stale for each pool
     fresh_internal = [r for r in internal if r["email"] not in recent]
