@@ -1339,7 +1339,39 @@ elif page == "📈 Analytics":
                 df = pd.DataFrame(success)
                 df = df[["sender_email", "total_sent", "total_inbox", "total_replied"]]
                 df.columns = ["Sender Email", "Total Sent", "Total Inbox", "Total Replied"]
-                df = df.sort_values("Total Sent", ascending=False)
+                
+                # Apply custom sort order
+                CUSTOM_ORDER = [
+                    "bill@reimaginehome.shop", "shitalgohil@reimaginehome.shop", 
+                    "christina@reimaginehome.shop", "christie@reimaginehome.shop", 
+                    "ava@reimaginehome.shop", "noah@reimaginehome.shop", 
+                    "akhileshmajumdar@reimaginehome.shop", "akhileshm@reimaginehome.shop", 
+                    "shitalg@reimaginehome.shop", "tayne@reimaginehome.app", 
+                    "sopia@reimaginehome.app", "alex@reimaginehome.app", 
+                    "jason@reimaginehome.app", "emily@reimaginehome.app", 
+                    "henan@reimaginehome.app", "desiree@reimaginehome.app", 
+                    "tiffany@reimaginehome.app", "chris@reimaginehome.app", 
+                    "melissa@reimaginehome.app", "jeroen@reimaginehome.tech", 
+                    "valentina@reimaginehome.tech", "lucas@reimaginehome.tech", 
+                    "amelia@reimaginehome.tech", "ryan@reimaginehome.tech", 
+                    "helen@reimaginehome.tech", "barbara@reimaginehome.tech", 
+                    "jade@reimaginehome.tech", "valencia@reimaginehome.tech", 
+                    "luke@reimaginehome.tech", "diego@reimaginehome.homes", 
+                    "olivia@reimaginehome.homes", "lena@reimaginehome.homes", 
+                    "daniel@reimaginehome.homes", "elena@reimaginehome.homes", 
+                    "ben@reimaginehome.homes", "jennifer@reimaginehome.homes", 
+                    "shelly@reimaginehome.homes", "kimberley@reimaginehome.homes", 
+                    "stephan@reimaginehome.homes", "akhilesh.majumdar@reimaginehome.net", 
+                    "m.akhilesh@reimaginehome.net", "gohilshital@reimaginehome.net", 
+                    "akhilesh@reimaginehome.net", "shitalgohil@reimaginehome.net", 
+                    "majumdarakhilesh@reimaginehome.net", "akhileshmajumdar@reimaginehome.net", 
+                    "gohil.shital@reimaginehome.net", "shital.g@reimaginehome.net", 
+                    "shital.gohil@reimaginehome.net", "shitalg@reimaginehome.net", 
+                    "Shital@reimaginehome.net", "akhilesh.m@reimaginehome.net"
+                ]
+                order_map = {email.lower(): i for i, email in enumerate(CUSTOM_ORDER)}
+                df["sort_order"] = df["Sender Email"].str.lower().map(order_map).fillna(9999)
+                df = df.sort_values(["sort_order", "Total Sent"], ascending=[True, False]).drop(columns=["sort_order"])
 
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
