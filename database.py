@@ -224,7 +224,7 @@ SEED_RECEIVERS = [
     ("Prithvi", "prithvi.pr1011@gmail.com"),
     ("Prithvi", "prithvi.gowda1999@gmail.com"),
     ("Rohit", "rohit.a.thorat@gmail.com"),
-    ("Rohit", "rothorat7779@gmail.com"),
+    ("Rohit", "thorat.rohit402@gmail.com"),
     ("Slade Winter", "sladewinter@gmail.com"),
     ("Deepak", "deepakpandey7100@gmail.com"),
     ("Arul", "arulpradeep95@gmail.com"),
